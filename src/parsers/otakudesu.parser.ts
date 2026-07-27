@@ -189,17 +189,58 @@ export function parseDetail(html: string, slug: string): AnimeDetail {
   };
 }
 
+/**
+ * Kandidat server mirror streaming Otakudesu.
+ * Situs sekarang tidak lagi expose URL video langsung di HTML: tiap <a> mirror
+ * punya atribut `data-content` berisi base64 JSON { id, i, q } yang baru bisa
+ * diubah jadi URL embed lewat 2 request AJAX ke wp-admin/admin-ajax.php
+ * (lihat helpers/otakudesuStreamResolver.ts). Fungsi ini hanya mem-parsing
+ * kandidatnya dari HTML, TIDAK melakukan resolve (biar parser tetap sync & pure).
+ */
+export interface MirrorCandidate {
+  provider: string;
+  quality: string;
+  isDefault: boolean;
+  content: { id: number; i: number; q: string };
+}
+
+export function parseMirrorCandidates(html: string): MirrorCandidate[] {
+  const $ = cheerio.load(html);
+  const candidates: MirrorCandidate[] = [];
+
+  $('.mirrorstream ul').each((_, ul) => {
+    $(ul)
+      .find('li a[data-content]')
+      .each((__, a) => {
+        const $a = $(a);
+        const raw = $a.attr('data-content');
+        if (!raw) return;
+        try {
+          const content = JSON.parse(Buffer.from(raw, 'base64').toString('utf-8'));
+          if (!content || typeof content.id === 'undefined') return;
+          candidates.push({
+            provider: $a.text().trim(),
+            quality: content.q || 'Unknown',
+            isDefault: $a.attr('data-default') === 'true',
+            content,
+          });
+        } catch {
+          // data-content korup/berubah format, skip kandidat ini
+        }
+      });
+  });
+
+  return candidates;
+}
+
 export function parseEpisode(html: string, slug: string): EpisodeDetail {
   const $ = cheerio.load(html);
 
+  // Streaming servernya butuh 2 request AJAX tambahan buat resolve URL asli
+  // (lihat parseMirrorCandidates di atas), jadi di sini dikosongkan dulu;
+  // scraper layer (scrapers/otakudesu/episode.ts) yang akan mengisi field ini
+  // setelah resolve kandidat dari parseMirrorCandidates().
   const streamServers: StreamServer[] = [];
-  $('#server select option, .mirrorstream select option').each((_, el) => {
-    const value = $(el).attr('value') || '';
-    const name = $(el).text().trim();
-    if (name && value) {
-      streamServers.push({ name, url: value });
-    }
-  });
 
   const downloadList: DownloadGroup[] = [];
   $('.download ul li, .downloadxx ul li').each((_, el) => {
@@ -218,16 +259,36 @@ export function parseEpisode(html: string, slug: string): EpisodeDetail {
     }
   });
 
+  // .flir cuma berisi 2 (atau 3) link: "Previous Eps." (title="Episode Sebelumnya"),
+  // kadang "Next Eps." (title="Episode Selanjutnya"), dan "See All Episodes" (TANPA
+  // title attribute, dikenali dari href yang mengarah ke /anime/).
+  let prevHref = '';
+  let nextHref = '';
+  let allEpisodeHref = '';
+
+  $('.flir a').each((_, el) => {
+    const $el = $(el);
+    const href = $el.attr('href') || '';
+    const title = ($el.attr('title') || '').toLowerCase();
+    if (href.includes('/anime/')) {
+      allEpisodeHref = href;
+    } else if (title.includes('sebelumnya') || title.includes('prev')) {
+      prevHref = href;
+    } else if (title.includes('selanjutnya') || title.includes('berikutnya') || title.includes('next')) {
+      nextHref = href;
+    }
+  });
+
   return {
     title: $('.venutama h1, h1.entry-title').first().text().trim(),
     slug,
-    animeSlug: slugFromUrl($('.lokasidownload a, .flir a').first().attr('href')),
+    animeSlug: slugFromUrl(allEpisodeHref),
     streamServers,
     downloadList,
     navigation: {
-      prevSlug: slugFromUrl($('.flir a[title*="Prev"], .flir a.leftx').attr('href')),
-      nextSlug: slugFromUrl($('.flir a[title*="Next"], .flir a.rightx').attr('href')),
-      allEpisodeSlug: slugFromUrl($('.flir a[title*="List"], .flir a.centerx').attr('href')),
+      prevSlug: slugFromUrl(prevHref),
+      nextSlug: slugFromUrl(nextHref),
+      allEpisodeSlug: slugFromUrl(allEpisodeHref),
     },
   };
 }
