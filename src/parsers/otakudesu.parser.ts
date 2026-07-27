@@ -42,7 +42,7 @@ export function parseHome(html: string): HomeData {
           releaseDay: $item.find('.epztipe').text().trim() || undefined,
         };
         if (card.title) {
-          if (section.includes('completed') || section.includes('tamat')) {
+          if (section.includes('complete') || section.includes('tamat')) {
             completed.push(card);
           } else {
             ongoing.push(card);
