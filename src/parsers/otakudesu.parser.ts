@@ -130,9 +130,8 @@ export function parseSearch(html: string): AnimeCard[] {
       slug: slugFromUrl(url),
       poster: $item.find('img').attr('src') || '',
       url,
-      status: $item.find('.set').eq(0).text().replace('Status', '').trim() || undefined,
-      type: $item.find('.set').eq(1).text().replace('Type', '').trim() || undefined,
-      score: $item.find('.set').eq(2).text().replace('Score', '').trim() || undefined,
+      status: $item.find('.set').eq(1).text().replace(/Status\s*:?/i, '').trim() || undefined,
+      score: $item.find('.set').eq(2).text().replace(/Rating\s*:?/i, '').trim() || undefined,
     });
   });
   return list;
@@ -150,13 +149,15 @@ export function parseDetail(html: string, slug: string): AnimeDetail {
   });
 
   const genres: GenreItem[] = [];
-  $('.infozin .genre-info a, .genre-info a').each((_, el) => {
-    const href = $(el).attr('href') || '';
-    genres.push({
-      name: $(el).text().trim(),
-      slug: slugFromUrl(href),
-      url: href,
-    });
+  $('.infozin .infozingle p, .infozingle p').each((_, el) => {
+    const $el = $(el);
+    const label = $el.text().split(':')[0]?.trim().toLowerCase() || '';
+    if (label.includes('genre')) {
+      $el.find('a').each((__, a) => {
+        const href = $(a).attr('href') || '';
+        genres.push({ name: $(a).text().trim(), slug: slugFromUrl(href), url: href });
+      });
+    }
   });
 
   const episodeList: EpisodeItem[] = [];
