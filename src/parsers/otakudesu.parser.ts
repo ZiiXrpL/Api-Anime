@@ -26,46 +26,35 @@ export function parseHome(html: string): HomeData {
   const ongoing: AnimeCard[] = [];
   const completed: AnimeCard[] = [];
 
-  $('.rapi').each((_, el) => {
-    const section = $(el).closest('.venser').find('h1.jdlrx').text().toLowerCase();
-    $(el)
-      .find('.venz > ul > li')
-      .each((__, item) => {
-        const $item = $(item);
-        const url = $item.find('h2.jdlflm').parent('a').attr('href') || $item.find('a').attr('href') || '';
-        const card: AnimeCard = {
-          title: $item.find('h2.jdlflm').text().trim(),
-          slug: slugFromUrl(url),
-          poster: $item.find('img').attr('src') || '',
-          url,
-          episode: $item.find('.epz').text().trim() || undefined,
-          releaseDay: $item.find('.epztipe').text().trim() || undefined,
-        };
-        if (card.title) {
-          if (section.includes('complete') || section.includes('tamat')) {
-            completed.push(card);
-          } else {
-            ongoing.push(card);
-          }
-        }
-      });
-  });
+  $('.venz > ul > li').each((_, item) => {
+    const $item = $(item);
+    const url = $item.find('h2.jdlflm').parent('a').attr('href') || $item.find('a').attr('href') || '';
+    const title = $item.find('h2.jdlflm').text().trim();
+    if (!title) return;
 
-  // fallback selector jika struktur berbeda (tema Otakudesu berubah cukup sering)
-  if (ongoing.length === 0 && completed.length === 0) {
-    $('.venz > ul > li').each((_, item) => {
-      const $item = $(item);
-      const url = $item.find('a').attr('href') || '';
-      const card: AnimeCard = {
-        title: $item.find('h2').text().trim(),
-        slug: slugFromUrl(url),
-        poster: $item.find('img').attr('src') || '',
-        url,
-        episode: $item.find('.epz').text().trim() || undefined,
-      };
-      if (card.title) ongoing.push(card);
-    });
-  }
+    const episodeText = $item.find('.epz').text().trim() || undefined;
+    const infoText = $item.find('.epztipe').text().trim();
+
+    // Anime completed ditandai baris kedua berupa skor desimal (contoh: "7.85"),
+    // sedangkan ongoing baris keduanya nama hari (contoh: "Senin").
+    const isScoreLike = /^\d+(\.\d+)?$/.test(infoText);
+
+    const card: AnimeCard = {
+      title,
+      slug: slugFromUrl(url),
+      poster: $item.find('img').attr('src') || '',
+      url,
+      episode: episodeText,
+    };
+
+    if (isScoreLike) {
+      card.score = infoText || undefined;
+      completed.push(card);
+    } else {
+      card.releaseDay = infoText || undefined;
+      ongoing.push(card);
+    }
+  });
 
   return { ongoing, completed };
 }
