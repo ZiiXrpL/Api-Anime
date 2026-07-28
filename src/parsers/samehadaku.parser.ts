@@ -42,14 +42,18 @@ export function parseHome(html: string): HomeData {
 export function parseOngoing(html: string): AnimeCard[] {
   const $ = cheerio.load(html);
   const list: AnimeCard[] = [];
+  const seen = new Set<string>();
   $('.listupd .bs, .relat .bs').each((_, el) => {
     const $el = $(el);
     const url = $el.find('a').first().attr('href') || '';
     const title = $el.find('.tt, h2').first().text().trim();
     if (!title) return;
+    const slug = slugFromUrl(url);
+    if (slug && seen.has(slug)) return;
+    if (slug) seen.add(slug);
     list.push({
       title,
-      slug: slugFromUrl(url),
+      slug,
       poster: $el.find('img').attr('src') || $el.find('img').attr('data-src') || '',
       url,
       episode: $el.find('.epx').text().trim() || undefined,
@@ -71,14 +75,18 @@ export function parseMovie(html: string): AnimeCard[] {
 export function parseSearch(html: string): AnimeCard[] {
   const $ = cheerio.load(html);
   const list: AnimeCard[] = [];
+  const seen = new Set<string>();
   $('.listupd .bs, article.bs').each((_, el) => {
     const $el = $(el);
     const url = $el.find('a').first().attr('href') || '';
     const title = $el.find('.tt, h2').first().text().trim();
     if (!title) return;
+    const slug = slugFromUrl(url);
+    if (slug && seen.has(slug)) return;
+    if (slug) seen.add(slug);
     list.push({
       title,
-      slug: slugFromUrl(url),
+      slug,
       poster: $el.find('img').attr('src') || $el.find('img').attr('data-src') || '',
       url,
       score: $el.find('.numscore').text().trim() || undefined,

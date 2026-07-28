@@ -62,14 +62,18 @@ export function parseHome(html: string): HomeData {
 export function parseOngoing(html: string): AnimeCard[] {
   const $ = cheerio.load(html);
   const list: AnimeCard[] = [];
+  const seen = new Set<string>();
   $('.venz > ul > li, .detpost').each((_, item) => {
     const $item = $(item);
     const url = $item.find('a').first().attr('href') || '';
     const title = $item.find('h2.jdlflm, .jdlflm, h2').first().text().trim();
     if (!title) return;
+    const slug = slugFromUrl(url);
+    if (slug && seen.has(slug)) return;
+    if (slug) seen.add(slug);
     list.push({
       title,
-      slug: slugFromUrl(url),
+      slug,
       poster: $item.find('img').attr('src') || '',
       url,
       episode: $item.find('.epz').text().trim() || undefined,
@@ -82,14 +86,18 @@ export function parseOngoing(html: string): AnimeCard[] {
 export function parseCompleted(html: string): AnimeCard[] {
   const $ = cheerio.load(html);
   const list: AnimeCard[] = [];
+  const seen = new Set<string>();
   $('.venz > ul > li, .detpost').each((_, item) => {
     const $item = $(item);
     const url = $item.find('a').first().attr('href') || '';
     const title = $item.find('h2.jdlflm, .jdlflm, h2').first().text().trim();
     if (!title) return;
+    const slug = slugFromUrl(url);
+    if (slug && seen.has(slug)) return;
+    if (slug) seen.add(slug);
     list.push({
       title,
-      slug: slugFromUrl(url),
+      slug,
       poster: $item.find('img').attr('src') || '',
       url,
       score: $item.find('.epz, .rating').text().trim() || undefined,
@@ -101,14 +109,18 @@ export function parseCompleted(html: string): AnimeCard[] {
 export function parseMovie(html: string): AnimeCard[] {
   const $ = cheerio.load(html);
   const list: AnimeCard[] = [];
+  const seen = new Set<string>();
   $('.venz > ul > li, .detpost, article').each((_, item) => {
     const $item = $(item);
     const url = $item.find('a').first().attr('href') || '';
     const title = $item.find('h2, .jdlflm').first().text().trim();
     if (!title) return;
+    const slug = slugFromUrl(url);
+    if (slug && seen.has(slug)) return;
+    if (slug) seen.add(slug);
     list.push({
       title,
-      slug: slugFromUrl(url),
+      slug,
       poster: $item.find('img').attr('src') || '',
       url,
       type: 'Movie',
@@ -120,14 +132,18 @@ export function parseMovie(html: string): AnimeCard[] {
 export function parseSearch(html: string): AnimeCard[] {
   const $ = cheerio.load(html);
   const list: AnimeCard[] = [];
+  const seen = new Set<string>();
   $('.chivsrc > li, .venz > ul > li').each((_, item) => {
     const $item = $(item);
     const url = $item.find('a').first().attr('href') || '';
     const title = $item.find('h2').first().text().trim();
     if (!title) return;
+    const slug = slugFromUrl(url);
+    if (slug && seen.has(slug)) return;
+    if (slug) seen.add(slug);
     list.push({
       title,
-      slug: slugFromUrl(url),
+      slug,
       poster: $item.find('img').attr('src') || '',
       url,
       status: $item.find('.set').eq(1).text().replace(/Status\s*:?/i, '').trim() || undefined,
