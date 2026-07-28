@@ -1,4 +1,4 @@
-export type SourceName = 'Otakudesu' | 'Samehadaku';
+export type SourceName = 'Otakudesu' | 'Samehadaku' | 'Gabungan';
 
 export interface Pagination {
   currentPage: number;
