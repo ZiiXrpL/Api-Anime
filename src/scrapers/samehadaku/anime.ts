@@ -1,5 +1,5 @@
 import { samehadakuClient } from '../../helpers/axiosClient';
-import { parseGenreAnimeList } from '../../parsers/samehadaku.parser';
+import { parseAnimeList } from '../../parsers/samehadaku.parser';
 import { AnimeCard } from '../../interfaces/anime.interface';
 import { SourceError } from '../../interfaces/errors.interface';
 
@@ -10,7 +10,7 @@ export async function getAllAnime(page = 1): Promise<AnimeCard[]> {
   try {
     const path = page > 1 ? `/daftar-anime-2/page/${page}` : '/daftar-anime-2';
     const { data } = await samehadakuClient.get<string>(path);
-    return parseGenreAnimeList(data);
+    return parseAnimeList(data);
   } catch (error) {
     throw new SourceError('Samehadaku', `Gagal mengambil daftar anime: ${(error as Error).message}`);
   }

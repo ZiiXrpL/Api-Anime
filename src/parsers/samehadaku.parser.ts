@@ -208,3 +208,28 @@ export function parseGenreList(html: string): GenreItem[] {
 export function parseGenreAnimeList(html: string): AnimeCard[] {
   return parseOngoing(html);
 }
+
+/**
+ * Parser khusus halaman /daftar-anime-2/ (daftar A-Z). Kemungkinan besar
+ * bukan grid card seperti listupd .bs, jadi tidak pakai parseOngoing.
+ * Sama seperti versi Otakudesu: ambil semua <a> ke "/anime/...", dedupe by slug,
+ * supaya tidak bergantung pada nama class tertentu yang belum terverifikasi.
+ */
+export function parseAnimeList(html: string): AnimeCard[] {
+  const $ = cheerio.load(html);
+  const list: AnimeCard[] = [];
+  const seen = new Set<string>();
+
+  $('a[href*="/anime/"]').each((_, el) => {
+    const $el = $(el);
+    const href = $el.attr('href') || '';
+    if (!href.includes('/anime/')) return;
+    const slug = slugFromUrl(href);
+    const title = $el.text().trim();
+    if (!slug || !title || seen.has(slug)) return;
+    seen.add(slug);
+    list.push({ title, slug, poster: '', url: href });
+  });
+
+  return list;
+}
