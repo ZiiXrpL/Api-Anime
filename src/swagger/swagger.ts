@@ -1,14 +1,17 @@
+import { moviePaths, movieSwaggerTag } from './movie.swagger';
+
 export const swaggerDocument = {
   openapi: '3.0.0',
   info: {
     title: 'Anime API Indonesia',
     version: '1.0.0',
     description:
-      'REST API Anime dengan sistem Multi Source (Otakudesu -> Samehadaku -> Error) hasil scraping langsung, tanpa API pihak ketiga.',
+      'REST API Anime (Otakudesu -> Samehadaku -> Error) + Movie (multi-source, modular via config) hasil scraping langsung, tanpa API pihak ketiga.',
   },
   servers: [{ url: '/' }],
-  tags: [{ name: 'Anime API' }],
+  tags: [{ name: 'Anime API' }, movieSwaggerTag],
   paths: {
+    ...moviePaths,
     '/health': {
       get: { summary: 'Cek status kesehatan server', responses: { '200': { description: 'OK' } } },
     },
