@@ -120,7 +120,7 @@ function buildQuery(filters?: MovieListFilters): string {
 const sourceA: MovieSourceConfig = {
   name: getEnv('MOVIE_SOURCE_A_NAME', 'SourceA'),
 
-  baseURL: getEnv('MOVIE_SOURCE_A_URL', ''),
+  baseURL: getEnv('MOVIE_SOURCE_A_URL', 'https://tv12.lk21official.cc'),
   paths: {
     home: '/',
     // Situs sumber tidak punya path /movies — daftar utama dipakai lewat
