@@ -11,6 +11,7 @@ import {
   MovieYearItem,
 } from '../../interfaces/movie.interface';
 import * as MovieParser from '../../parsers/movie.parser';
+import { logger } from '../../utils/logger';
 
 /**
  * Semua fungsi di bawah menerima `source: MovieSourceConfig` sebagai
@@ -45,23 +46,71 @@ export async function fetchList(
 }
 
 export async function fetchSearch(source: MovieSourceConfig, query: string, page = 1): Promise<MovieCard[]> {
-  // FIX (masalah "search film selalu kosong"): halaman /search situs ini
-  // TIDAK berisi hasil apa pun di HTML-nya — hasil dimuat lewat AJAX oleh
-  // JS halaman ke endpoint JSON search.php di domain terpisah (disamarkan),
-  // yang alamatnya dibaca dari atribut data-search_url di <body> homepage.
-  // Dibaca dinamis (bukan di-hardcode) supaya kalau situsnya ganti domain
-  // penyamaran itu lagi nanti, kode ini tetap otomatis ikut.
-  const homeHtml = await fetchHtml(source, source.paths.home);
-  const cfg = MovieParser.parseSearchConfig(homeHtml);
+  // FIX (masalah "search selalu gagal 403"): endpoint search.php di domain
+  // tersamar ternyata dilindungi ketat oleh situs sumber (403 konsisten,
+  // bukan rate-limit sementara — sudah dites berkali-kali beda waktu, beda
+  // kata kunci, tetap 403). Ini proteksi yang disengaja, bukan bug di kode
+  // kita, dan menembusnya "beneran" butuh headless browser (berat, belum
+  // tentu berhasil juga karena Cloudflare bisa mendeteksi itu juga).
+  //
+  // Solusi yang dipakai: coba endpoint asli dulu; kalau gagal, fallback ke
+  // "pencarian dari listing" — ambil beberapa halaman /latest yang memang
+  // TIDAK diblokir, lalu cocokkan judulnya sendiri di sini. Konsekuensi yang
+  // disadari: cakupannya cuma sebatas film-film di halaman terbaru (bukan
+  // seluruh katalog situs), tapi ini jauh lebih baik daripada selalu gagal
+  // total, dan tidak butuh infrastruktur tambahan yang berat.
+  try {
+    const homeHtml = await fetchHtml(source, source.paths.home);
+    const cfg = MovieParser.parseSearchConfig(homeHtml);
+    if (!cfg) {
+      throw new SourceError(source.name, 'data-search_url tidak ditemukan di homepage — situs mungkin ganti struktur lagi');
+    }
+    const searchApiUrl = cfg.searchUrl.replace(/\/$/, '') + '/search.php';
+    const json = await getJson(searchApiUrl, { s: query, page });
+    const results = MovieParser.parseSearchApiResponse(json, cfg.thumbnailUrl);
+    if (results.length > 0) return results;
+    // API-nya sukses tapi kosong beneran (bukan diblokir) -> percaya itu,
+    // jangan lanjut fallback supaya tidak menampilkan hasil yang salah.
+    return results;
+  } catch (apiError) {
+    logger.warn(
+      `${source.name}: search API gagal (${(apiError as Error).message}), fallback ke pencarian dari listing terbaru`,
+    );
+    return fetchSearchViaListing(source, query);
+  }
+}
 
-  if (!cfg) {
-    throw new SourceError(source.name, 'data-search_url tidak ditemukan di homepage — situs mungkin ganti struktur lagi');
+async function fetchSearchViaListing(source: MovieSourceConfig, query: string): Promise<MovieCard[]> {
+  const q = query.trim().toLowerCase();
+  if (q === '') return [];
+
+  const MAX_PAGES = 5;
+  const MAX_RESULTS = 20;
+  const seenSlugs = new Set<string>();
+  const results: MovieCard[] = [];
+
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    let cards: MovieCard[];
+    try {
+      const html = await fetchHtml(source, source.paths.latest(page));
+      cards = MovieParser.parseMovieList(html, source);
+    } catch {
+      break; // halaman ini gagal diambil -> hentikan, kembalikan yang sudah ketemu
+    }
+
+    if (cards.length === 0) break; // sudah habis halamannya
+
+    for (const card of cards) {
+      if (!seenSlugs.has(card.slug) && card.title.toLowerCase().includes(q)) {
+        seenSlugs.add(card.slug);
+        results.push(card);
+      }
+    }
+
+    if (results.length >= MAX_RESULTS) break;
   }
 
-  const searchApiUrl = cfg.searchUrl.replace(/\/$/, '') + '/search.php';
-  const json = await getJson(searchApiUrl, { s: query, page });
-
-  return MovieParser.parseSearchApiResponse(json, cfg.thumbnailUrl);
+  return results;
 }
 
 export async function fetchDetail(source: MovieSourceConfig, id: string): Promise<MovieDetail> {

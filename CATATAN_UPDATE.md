@@ -146,3 +146,32 @@ Best-effort: HTML utama biasanya berhasil, tapi kalau providernya pakai
 proteksi tambahan (token per-request, referrer check ketat, resource
 terpisah yang tidak ikut ter-rewrite) sebagian masih bisa gagal — link
 "buka di tab baru" tetap ada sebagai jalan keluar pasti.
+
+---
+
+# Update 2026-07-30 (lanjutan lagi) — Search: fallback karena endpoint asli sengaja diblokir situsnya
+
+Dites berkali-kali beda waktu (12:39, 12:42, 12:43) beda kata kunci
+("Doraemon", "Auction" — yang keduanya jelas ADA di katalog situsnya),
+tetap 403 terus-menerus di endpoint `search.php` (domain tersamar). Ini
+memastikan bukan rate-limit sementara, tapi proteksi yang memang
+disengaja oleh situs sumber untuk endpoint itu — di luar kendali kode
+scraping manapun tanpa infrastruktur tambahan yang berat (headless
+browser, yang juga belum tentu berhasil karena bisa ikut terdeteksi).
+
+**Solusi yang dipilih (paling efektif tanpa nambah beban server):**
+`fetchSearch()` di `movieScraper.ts` sekarang:
+1. Tetap coba endpoint search.php asli dulu (kalau situsnya sewaktu-waktu
+   berhenti memblokir, otomatis langsung pakai ini lagi, tanpa perlu
+   update kode).
+2. Kalau gagal (403/error apapun), fallback ke `fetchSearchViaListing()`
+   — ambil sampai 5 halaman `/latest` (endpoint yang TIDAK diblokir), lalu
+   cocokkan judulnya sendiri di kode kita (case-insensitive, substring
+   match), maksimal 20 hasil.
+
+**Konsekuensi yang disadari:** hasil pencarian sekarang cuma mencakup
+film-film yang ada di beberapa halaman "Film Terbaru" pertama — bukan
+seluruh katalog situs. Film lama yang sudah jauh dari halaman pertama
+mungkin tidak ketemu walau sebenarnya ada di situs asli. Ini trade-off
+yang disengaja: lebih baik sebagian besar kasus umum (search judul yang
+lagi ramai/baru) tetap jalan, daripada search selalu gagal total.
