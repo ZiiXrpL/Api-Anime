@@ -166,7 +166,7 @@ const sourceA: MovieSourceConfig = {
     list: {
       // Kartu film ada di dalam <li class="slider"><article>...</article></li>,
       // dipakai bersama baik di .featured maupun tiap .widget.
-      item: 'li.slider article',
+      item: '.gallery-grid article',
       title: '.poster-title',
       link: 'a',
       poster: 'img',
