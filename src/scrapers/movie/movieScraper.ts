@@ -1,4 +1,4 @@
-import { getMovieHttpClient } from '../../helpers/movieHttpClient';
+import { getMovieHttpClient, getJson } from '../../helpers/movieHttpClient';
 import { MovieSourceConfig } from '../../configs/movieSources.config';
 import { SourceError } from '../../interfaces/errors.interface';
 import {
@@ -44,9 +44,24 @@ export async function fetchList(
   return MovieParser.parseMovieList(html, source);
 }
 
-export async function fetchSearch(source: MovieSourceConfig, query: string): Promise<MovieCard[]> {
-  const html = await fetchHtml(source, source.paths.search(query));
-  return MovieParser.parseSearchResults(html, source);
+export async function fetchSearch(source: MovieSourceConfig, query: string, page = 1): Promise<MovieCard[]> {
+  // FIX (masalah "search film selalu kosong"): halaman /search situs ini
+  // TIDAK berisi hasil apa pun di HTML-nya — hasil dimuat lewat AJAX oleh
+  // JS halaman ke endpoint JSON search.php di domain terpisah (disamarkan),
+  // yang alamatnya dibaca dari atribut data-search_url di <body> homepage.
+  // Dibaca dinamis (bukan di-hardcode) supaya kalau situsnya ganti domain
+  // penyamaran itu lagi nanti, kode ini tetap otomatis ikut.
+  const homeHtml = await fetchHtml(source, source.paths.home);
+  const cfg = MovieParser.parseSearchConfig(homeHtml);
+
+  if (!cfg) {
+    throw new SourceError(source.name, 'data-search_url tidak ditemukan di homepage — situs mungkin ganti struktur lagi');
+  }
+
+  const searchApiUrl = cfg.searchUrl.replace(/\/$/, '') + '/search.php';
+  const json = await getJson(searchApiUrl, { s: query, page });
+
+  return MovieParser.parseSearchApiResponse(json, cfg.thumbnailUrl);
 }
 
 export async function fetchDetail(source: MovieSourceConfig, id: string): Promise<MovieDetail> {

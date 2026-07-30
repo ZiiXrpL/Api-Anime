@@ -56,3 +56,93 @@ halaman detail, url tiap server streaming, dan url tiap link download.
 begitu proses di-restart setelah deploy, jadi tidak perlu tindakan manual
 tambahan selain restart service Node-nya (bukan hanya redeploy source-nya
 saja kalau proses lama masih berjalan).
+
+---
+
+# Update 2026-07-30 — Situs sumber ganti struktur HTML listing (root cause SEBENARNYA)
+
+Setelah update sebelumnya di-deploy, `/movies` (bahkan tanpa filter sama
+sekali) tetap balas 503 "Data kosong dari SourceA". Dari HTML asli
+`/latest` yang dikirim user (curl langsung ke situsnya), ketahuan
+penyebab sebenarnya: situs sumber (`tv12.lk21official.cc`) mengganti
+pembungkus kartu film dari:
+
+```html
+<li class="slider"><article>...</article></li>
+```
+
+menjadi:
+
+```html
+<div class="gallery-grid"><article>...</article></div>
+```
+
+Selector lama (`item: 'li.slider article'`) jadi tidak menemukan
+apa-apa — makanya SEMUA endpoint yang memakai `parseMovieList`
+(`/movies` polos, `/movies/genre/*`, `/movies/country/*`,
+`/movies/year/*`, `/movies/search`) selalu dapat 0 hasil, bukan cuma
+kombinasi filter seperti dugaan awal. Endpoint `/movies/genre`,
+`/movies/country`, `/movies/year` (daftar NAMA genre/negara/tahun,
+bukan daftar film) tetap 200 karena pakai selector nav yang berbeda dan
+memang tidak berubah.
+
+Elemen lain di dalam kartu (`.poster-title`, `.label` kualitas,
+`.rating`, `.year`) dikonfirmasi TIDAK berubah — cuma wrapper-nya saja.
+
+**Perbaikan:** `movieSources.config.ts` — `selectors.list.item` diganti
+dari `li.slider article` jadi `.gallery-grid article`.
+
+**Catatan:** halaman genre/country/year/search dan homepage widget
+(`.widget[data-type="latest-movies"]`, `.featured`) memakai fungsi
+parsing yang SAMA (`parseCardsWithin` + `list.item`), jadi perbaikan
+ini otomatis berlaku untuk semuanya. Kalau ternyata bagian "Film" di
+HOMEPAGE (halaman `/`, bukan `/latest`) masih kosong setelah update ini
+(kemungkinan kecil, kalau homepage-nya pakai template lain), kirim hasil:
+```
+curl -s -A "Mozilla/5.0" https://tv12.lk21official.cc/ -o ~/home.html
+grep -o 'class="[^"]*"' ~/home.html | sort | uniq -c | sort -rn | head -30
+```
+
+---
+
+# Update 2026-07-30 (lanjutan) — Search film ternyata AJAX, bukan HTML
+
+Dari file `page/search.js` situs sumber, ketahuan halaman `/search` TIDAK
+pernah berisi hasil apa pun di HTML-nya — hasil dimuat belakangan lewat
+AJAX ke endpoint JSON di **domain terpisah yang disamarkan**
+(`data-search_url` di `<body>` homepage, contoh yang ditemukan:
+`https://gudangvape.com/`), memanggil `search.php?s=...&page=...` yang
+balas JSON `{ data: [...], totalPages }` dengan field per item: `slug`,
+`title` (masih ada suffix "(2024)"), `poster` (path relatif ke
+`data-thumbnail_url`), `rating`, `year`, `quality`.
+
+**Perbaikan:**
+- `movie.parser.ts` — tambah `parseSearchConfig()` (baca
+  `data-search_url`/`data-thumbnail_url` dari homepage) dan
+  `parseSearchApiResponse()` (map JSON di atas ke `MovieCard`).
+- `movieHttpClient.ts` — tambah `getJson()` untuk panggilan sekali-pakai
+  ke url absolut di domain manapun (search API-nya bukan di baseURL utama).
+- `movieScraper.ts` — `fetchSearch()` ditulis ulang: ambil homepage dulu
+  buat baca `data-search_url` (DIBACA DINAMIS, sengaja tidak di-hardcode,
+  supaya kalau domain samaran ini berubah lagi nanti tetap otomatis ikut),
+  baru panggil `search.php` di domain itu.
+
+## Streaming tetap "menolak terhubung" — solusi reverse-proxy
+
+Ternyata url server streaming (videonode.de dkk) SUDAH absolut — bukan
+soal url relatif seperti dugaan pertama. Providernya memasang header
+`Content-Security-Policy: frame-ancestors 'self' *.lk21official.* ...`
+yang cuma mengizinkan dirinya di-iframe dari domain keluarga situs asal —
+browser akan SELALU menolak menampilkannya lewat `<iframe>` di domain
+lain, apapun yang dilakukan di sisi scraping.
+
+Karena user minta videonya tetap tertanam di web sendiri (bukan buka tab
+baru), solusinya dipindah ke sisi Laravel: `StreamProxyController`
+(`/stream-proxy?url=...`) mengambil video dari server sumber lewat
+backend sendiri lalu mengirim ulang ke browser TANPA header CSP/X-Frame-
+Options upstream — jadi browser tidak melihat proteksi itu sama sekali.
+`js/app.js` (`videoPlayer().iframeUrl`) diarahkan lewat proxy ini.
+Best-effort: HTML utama biasanya berhasil, tapi kalau providernya pakai
+proteksi tambahan (token per-request, referrer check ketat, resource
+terpisah yang tidak ikut ter-rewrite) sebagian masih bisa gagal — link
+"buka di tab baru" tetap ada sebagai jalan keluar pasti.

@@ -91,6 +91,62 @@ export function parseSearchResults(html: string, source: MovieSourceConfig): Mov
   return parseMovieList(html, source);
 }
 
+// FIX (masalah "search film selalu kosong"): hasil pencarian di situs ini
+// TIDAK ada di HTML sama sekali — dimuat lewat AJAX oleh JS halaman search ke
+// endpoint JSON di domain terpisah (disamarkan, dibaca dari atribut
+// data-search_url di <body> halaman utama, contoh nyata yang ditemukan:
+// "https://gudangvape.com/"). Dua fungsi di bawah menggantikan pendekatan
+// scraping-HTML lama yang tidak akan pernah menemukan apa pun untuk search.
+
+export interface MovieSearchApiConfig {
+  searchUrl: string;
+  thumbnailUrl: string;
+}
+
+export function parseSearchConfig(html: string): MovieSearchApiConfig | null {
+  const $ = cheerio.load(html);
+  const body = $('body').first();
+  const searchUrl = (body.attr('data-search_url') || '').trim();
+  const thumbnailUrl = (body.attr('data-thumbnail_url') || '').trim();
+  if (searchUrl === '') return null;
+  return { searchUrl, thumbnailUrl };
+}
+
+function resolveSearchPoster(poster: string | undefined, thumbnailUrl: string): string {
+  if (!poster) return '';
+  if (/^https?:\/\//i.test(poster)) return poster;
+  if (thumbnailUrl === '') return poster;
+  return thumbnailUrl.replace(/\/$/, '') + '/' + poster.replace(/^\//, '');
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function parseSearchApiResponse(json: any, thumbnailUrl: string): MovieCard[] {
+  const items: unknown[] = Array.isArray(json?.data) ? json.data : Array.isArray(json?.items) ? json.items : [];
+
+  return items
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .map((raw): MovieCard | null => {
+      const a = raw as Record<string, unknown>;
+      const slug = String(a.slug ?? '').replace(/^\//, '');
+      const rawTitle = String(a.title ?? '');
+      const title = rawTitle.replace(/\(\d{4}\)$/, '').trim();
+      if (slug === '' || title === '') return null;
+
+      const rating = Number(a.rating);
+      return {
+        title,
+        slug,
+        poster: resolveSearchPoster(a.poster as string | undefined, thumbnailUrl),
+        url: '/' + slug,
+        quality: a.quality ? String(a.quality) : undefined,
+        rating: rating > 0 ? String(rating) : undefined,
+        year: a.year ? String(a.year) : undefined,
+        type: 'Movie',
+      };
+    })
+    .filter((c): c is MovieCard => c !== null);
+}
+
 export function parseHome(html: string, source: MovieSourceConfig): MovieHomeData {
   const $ = cheerio.load(html);
   const { home } = source.selectors;
