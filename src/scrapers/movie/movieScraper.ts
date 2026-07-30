@@ -64,6 +64,16 @@ export async function fetchByGenre(source: MovieSourceConfig, slug: string, page
   return MovieParser.parseMovieList(html, source);
 }
 
+export async function fetchByCountry(source: MovieSourceConfig, slug: string, page = 1): Promise<MovieCard[]> {
+  const html = await fetchHtml(source, source.paths.countryDetail(slug, page));
+  return MovieParser.parseMovieList(html, source);
+}
+
+export async function fetchByYear(source: MovieSourceConfig, year: string, page = 1): Promise<MovieCard[]> {
+  const html = await fetchHtml(source, source.paths.yearDetail(year, page));
+  return MovieParser.parseMovieList(html, source);
+}
+
 export async function fetchCountryList(source: MovieSourceConfig): Promise<MovieCountryItem[]> {
   const html = await fetchHtml(source, source.paths.countryList);
   return MovieParser.parseCountryList(html, source);

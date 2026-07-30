@@ -50,6 +50,18 @@ export const movieService = {
     );
   },
 
+  getByCountry(slug: string, page: number): Promise<MovieSourceResult<MovieCard[]>> {
+    return cacheManager.wrap(`movie:country:${slug}:${page}`, MOVIE_CACHE_TTL.LIST, () =>
+      withMovieFallback((source) => MovieScraper.fetchByCountry(source, slug, page)),
+    );
+  },
+
+  getByYear(year: string, page: number): Promise<MovieSourceResult<MovieCard[]>> {
+    return cacheManager.wrap(`movie:year:${year}:${page}`, MOVIE_CACHE_TTL.LIST, () =>
+      withMovieFallback((source) => MovieScraper.fetchByYear(source, year, page)),
+    );
+  },
+
   getCountryList(): Promise<MovieSourceResult<MovieCountryItem[]>> {
     return cacheManager.wrap('movie:countries', MOVIE_CACHE_TTL.TAXONOMY, () =>
       withMovieFallback((source) => MovieScraper.fetchCountryList(source)),

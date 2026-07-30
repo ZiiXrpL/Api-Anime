@@ -89,7 +89,9 @@ export interface MovieSourcePaths {
   genreList: string;
   genreDetail: (slug: string, page: number) => string;
   countryList: string;
+  countryDetail: (slug: string, page: number) => string;
   yearList: string;
+  yearDetail: (year: string, page: number) => string;
   latest: (page: number) => string;
   popular: (page: number) => string;
 }
@@ -120,11 +122,18 @@ function buildQuery(filters?: MovieListFilters): string {
 const sourceA: MovieSourceConfig = {
   name: getEnv('MOVIE_SOURCE_A_NAME', 'SourceA'),
 
-  baseURL: getEnv('MOVIE_SOURCE_A_URL', ''),
+  baseURL: getEnv('MOVIE_SOURCE_A_URL', 'https://tv12.lk21official.cc'),
   paths: {
     home: '/',
     // Situs sumber tidak punya path /movies — daftar utama dipakai lewat
     // /latest (nav "TERBARU") sesuai markup yang dikirim user.
+    // CATATAN: site sumber TIDAK mendukung filter genre/country/year lewat
+    // query string di /latest (?genre=&country=&year=) — parameter itu
+    // cuma diabaikan situsnya. Fungsi list() ini dipakai HANYA untuk kasus
+    // "tanpa filter sama sekali" (GET /movies polos). Begitu ada filter,
+    // movie.controller.ts sekarang me-route ke path khusus per-dimensi di
+    // bawah (genreDetail/countryDetail/yearDetail) yang memang didukung
+    // situsnya — bukan lewat fungsi list() ini.
     list: (page, filters) => {
       const base = page > 1 ? `/latest/page/${page}` : '/latest';
       return `${base}${buildQuery(filters)}`;
@@ -136,7 +145,13 @@ const sourceA: MovieSourceConfig = {
     genreList: '/',
     genreDetail: (slug, page) => (page > 1 ? `/genre/${slug}/page/${page}` : `/genre/${slug}`),
     countryList: '/',
+    // Sama polanya dengan genreDetail — link "/country/{slug}" di nav
+    // dropdown negara memang mengarah ke halaman listing tersendiri.
+    countryDetail: (slug, page) => (page > 1 ? `/country/${slug}/page/${page}` : `/country/${slug}`),
     yearList: '/',
+    // Sama polanya dengan genreDetail — link "/year/{year}" di nav
+    // dropdown tahun memang mengarah ke halaman listing tersendiri.
+    yearDetail: (year, page) => (page > 1 ? `/year/${year}/page/${page}` : `/year/${year}`),
     latest: (page) => (page > 1 ? `/latest/page/${page}` : '/latest'),
     popular: (page) => (page > 1 ? `/populer/page/${page}` : '/populer'),
   },

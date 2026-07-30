@@ -18,6 +18,29 @@ function slugFromUrl(url: string | undefined): string {
   return parts[parts.length - 1] ?? '';
 }
 
+// FIX (masalah "poster rusak di halaman detail" & "server streaming
+// menolak untuk terhubung"): beberapa elemen di halaman DETAIL situs
+// sumber (poster dari attribute `poster` milik <video id="videoAd">, dan
+// `data-url` di #player-list a untuk tiap server streaming) ternyata bisa
+// berupa URL RELATIF (mis. "/uploads/poster/x.jpg" atau
+// "/embed/player.php?id=xxx"), berbeda dari kartu di listing yang sudah
+// absolut. Kalau url relatif ini dipakai apa adanya sebagai <img src> atau
+// <iframe src> di FRONTEND KITA, browser akan coba memuatnya relatif
+// terhadap domain KITA (bukan domain situs sumber) — itulah yang
+// menyebabkan poster jadi ikon gambar rusak dan server streaming
+// "menolak untuk terhubung" (browser gagal connect ke path yang sebetulnya
+// tidak ada di domain kita). Helper ini menyamakan semua url relatif
+// menjadi absolut ke baseURL situs sumber sebelum dikirim ke client.
+function resolveUrl(possiblyRelative: string | undefined, baseURL: string): string {
+  if (!possiblyRelative) return '';
+  const url = possiblyRelative.trim();
+  if (url === '') return '';
+  if (/^https?:\/\//i.test(url)) return url;
+  if (url.startsWith('//')) return 'https:' + url;
+  const base = baseURL.replace(/\/$/, '');
+  return url.startsWith('/') ? base + url : base + '/' + url;
+}
+
 /**
  * Parse daftar kartu film di dalam sebuah scope (dipakai bareng oleh home,
  * list, search, genre, dsb) berdasarkan selector `list` dari
@@ -47,7 +70,7 @@ function parseCardsWithin($: cheerio.CheerioAPI, scopeSelector: string, source: 
     cards.push({
       title,
       slug,
-      poster,
+      poster: resolveUrl(poster, source.baseURL),
       url: href,
       quality: list.quality ? $item.find(list.quality).first().text().trim() || undefined : undefined,
       rating: list.rating ? $item.find(list.rating).first().text().trim() || undefined : undefined,
@@ -161,7 +184,7 @@ export function parseMovieDetail(html: string, source: MovieSourceConfig, id: st
       streamServers.push({
         name,
         quality: $el.attr('data-quality') || undefined,
-        url,
+        url: resolveUrl(url, source.baseURL),
       });
     });
   }
@@ -179,7 +202,7 @@ export function parseMovieDetail(html: string, source: MovieSourceConfig, id: st
         .find(linkSelector)
         .map((__, a) => ({
           provider: $(a).text().trim(),
-          url: $(a).attr('href') || '',
+          url: resolveUrl($(a).attr('href'), source.baseURL),
         }))
         .get()
         .filter((l) => l.url);
@@ -203,7 +226,10 @@ export function parseMovieDetail(html: string, source: MovieSourceConfig, id: st
   return {
     title,
     slug: id,
-    poster: $(d.poster).first().attr(posterAttr) || $(d.poster).first().attr('data-src') || '',
+    poster: resolveUrl(
+      $(d.poster).first().attr(posterAttr) || $(d.poster).first().attr('data-src') || '',
+      source.baseURL,
+    ),
     synopsis,
     rating: d.rating ? $(d.rating).first().text().trim() || undefined : undefined,
     quality: d.quality ? $(d.quality).first().text().trim() || undefined : undefined,

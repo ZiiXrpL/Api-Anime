@@ -15,8 +15,39 @@ export async function getMovieHomeController(_req: Request, res: Response): Prom
 
 export async function getAllMoviesController(req: Request, res: Response): Promise<void> {
   const { page, genre, country, year } = parseMovieListQuery(req.query as Record<string, unknown>);
-  const hasFilters = Boolean(genre || country || year);
-  const result = await movieService.getAllMovies(page, hasFilters ? { genre, country, year } : undefined);
+
+  // FIX (masalah "filter genre/negara/tahun selalu kosong"): situs sumber
+  // TIDAK mendukung filter lewat query string di /latest
+  // (?genre=&country=&year=) — parameter itu diabaikan begitu saja,
+  // sementara genre/negara/tahun di situs asli masing-masing punya
+  // halaman listing SENDIRI (/genre/{slug}, /country/{slug}, /year/{y}).
+  // Sebelumnya combined filter ini selalu diteruskan ke /latest?... yang
+  // pasti tidak cocok apa pun -> hasil selalu kosong.
+  //
+  // Sekarang: pilih SATU dimensi utama (prioritas genre > country > year)
+  // dan ambil dari halaman listing yang memang didukung situsnya. Kalau
+  // ada dimensi lain yang ikut di-set bersamaan, "year" masih bisa
+  // dicocokkan lagi di memori (card film sudah punya field year), tapi
+  // genre/country tidak (situs tidak menyediakan info itu per-card di
+  // halaman listing), jadi tetap best-effort untuk kombinasi genre+country.
+  let result: { source: string; data: import('../interfaces/movie.interface').MovieCard[] };
+
+  if (genre) {
+    result = await movieService.getByGenre(genre, page);
+  } else if (country) {
+    result = await movieService.getByCountry(country, page);
+  } else if (year) {
+    result = await movieService.getByYear(year, page);
+  } else {
+    result = await movieService.getAllMovies(page);
+  }
+
+  // Cocokkan lagi by year kalau year di-set BERSAMA dimensi lain (genre
+  // atau country jadi dimensi utama di atas, year jadi filter tambahan).
+  if (year && (genre || country)) {
+    result = { ...result, data: result.data.filter((m) => (m.year || '').includes(year)) };
+  }
+
   sendSuccess(res, {
     source: result.source,
     data: result.data,
