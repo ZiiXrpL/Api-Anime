@@ -324,62 +324,7 @@ export function parseGenreList(html: string): GenreItem[] {
 }
 
 export function parseGenreAnimeList(html: string): AnimeCard[] {
-  // Coba dulu parser grid lama (.venz/.detpost) untuk jaga-jaga kalau
-  // suatu saat template genre balik sama seperti ongoing/completed lagi.
-  const legacy = parseOngoing(html);
-  if (legacy.length > 0) return legacy;
-
-  // FALLBACK: per pertengahan 2026 halaman /genres/{slug} Otakudesu sudah
-  // pindah ke template arsip WordPress baru ("Daftar Genre Xxx") yang sama
-  // sekali beda dari grid ongoing/completed (tidak ada .venz/.jdlflm di
-  // sini), jadi parseOngoing() di atas selalu balik array kosong.
-  //
-  // Daripada menebak nama class tema yang baru (rawan berubah lagi kapan
-  // saja), dipakai pendekatan struktural yang sama seperti parseAnimeList():
-  // ambil tiap <a> yang mengarah ke "/anime/...", dedupe per slug, lalu
-  // telusuri elemen di sekitarnya untuk poster & skor. Ini otomatis tahan
-  // terhadap ganti tema selama URL anime masih polanya "/anime/<slug>/".
-  return parseGenreArchiveList(html);
-}
-
-function parseGenreArchiveList(html: string): AnimeCard[] {
-  const $ = cheerio.load(html);
-  const list: AnimeCard[] = [];
-  const seen = new Set<string>();
-
-  $('a[href*="/anime/"]').each((_, el) => {
-    const $el = $(el);
-    const href = $el.attr('href') || '';
-    if (!href.includes('/anime/')) return;
-    const slug = slugFromUrl(href);
-    if (!slug || seen.has(slug)) return;
-
-    // Tiap kartu anime di halaman ini punya 2 link ke "/anime/...": judul
-    // (di awal kartu) dan tombol "Download" (di akhir). Kita mau yang judul
-    // -> ambil kemunculan PERTAMA per slug & lewati teks generik "Download".
-    const text = $el.text().replace(/\s+/g, ' ').trim();
-    if (!text || /^download$/i.test(text)) return;
-
-    seen.add(slug);
-
-    // Skor (mis. "7.45") biasanya nempel di teks kartu dekat judul/badge.
-    const $card = $el.closest('article, li, div');
-    const cardText = $card.length ? $card.text() : text;
-    const scoreMatch = cardText.match(/\b\d\.\d{1,2}\b/);
-
-    // Poster: telusuri parent terdekat yang memuat <img>.
-    let poster = '';
-    let $container = $el.parent();
-    for (let i = 0; i < 5 && $container.length && !poster; i++) {
-      const img = $container.find('img').first();
-      if (img.length) poster = img.attr('src') || img.attr('data-src') || '';
-      $container = $container.parent();
-    }
-
-    list.push({ title: text, slug, poster, url: href, score: scoreMatch ? scoreMatch[0] : undefined });
-  });
-
-  return list;
+  return parseOngoing(html);
 }
 
 /**

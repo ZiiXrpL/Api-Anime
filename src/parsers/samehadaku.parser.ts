@@ -206,65 +206,7 @@ export function parseGenreList(html: string): GenreItem[] {
 }
 
 export function parseGenreAnimeList(html: string): AnimeCard[] {
-  // Coba dulu grid lama (.listupd .bs / .relat .bs) -> kalau halaman genre
-  // kebetulan masih pakai class ini, tidak perlu fallback sama sekali.
-  const legacy = parseOngoing(html);
-  if (legacy.length > 0) return legacy;
-
-  // FALLBACK: kalau halaman genre Samehadaku dirender pakai wrapper/class
-  // yang beda dari .listupd, parseOngoing() di atas balik kosong. Beda
-  // dengan Otakudesu, di Samehadaku teks anchor "/anime/..." biasanya
-  // BERCAMPUR dengan badge tipe/status (mis. "Judul TV JudulOngoing"),
-  // jadi tidak bisa langsung dipakai sebagai judul seperti punya Otakudesu.
-  // Judul bersih biasanya ada di heading (h1-h4) terdekat dalam kartu yang
-  // sama -> dicari lewat elemen kartu terdekat (article/li), baru fallback
-  // ke teks anchor kalau memang tidak ketemu heading.
-  return parseGenreArchiveList(html);
-}
-
-function parseGenreArchiveList(html: string): AnimeCard[] {
-  const $ = cheerio.load(html);
-  const list: AnimeCard[] = [];
-  const seen = new Set<string>();
-
-  $('a[href*="/anime/"]').each((_, el) => {
-    const $el = $(el);
-    const href = $el.attr('href') || '';
-    if (!href.includes('/anime/')) return;
-    const slug = slugFromUrl(href);
-    if (!slug || seen.has(slug)) return;
-
-    // Batasi pencarian judul/poster ke elemen kartu terdekat (article/li),
-    // supaya tidak "nyerempet" ambil heading milik kartu anime lain.
-    const $card = $el.closest('article, li');
-    const $scope = $card.length ? $card : $el.parent();
-
-    const heading = $scope.find('h1, h2, h3, h4').first();
-    const headingText = heading.text().trim();
-    const anchorText = $el.text().replace(/\s+/g, ' ').trim();
-    const title = headingText || anchorText;
-    if (!title || /^download$/i.test(title)) return;
-
-    seen.add(slug);
-
-    const img = $scope.find('img').first();
-    const poster = img.attr('src') || img.attr('data-src') || '';
-
-    const scopeText = $scope.text();
-    const scoreMatch = scopeText.match(/\b\d\.\d{1,2}\b/);
-    const typeMatch = scopeText.match(/\b(TV|Movie|OVA|ONA|Special)\b/);
-
-    list.push({
-      title,
-      slug,
-      poster,
-      url: href,
-      score: scoreMatch ? scoreMatch[0] : undefined,
-      type: typeMatch ? typeMatch[0] : undefined,
-    });
-  });
-
-  return list;
+  return parseOngoing(html);
 }
 
 /**

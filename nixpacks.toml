@@ -1,8 +1,22 @@
 [phases.setup]
-nixPkgs = ["nodejs_20"]
+nixPkgs = ["nodejs_20", "chromium"]
 
+# FIX (dukungan Kuramanime yang butuh headless browser): Puppeteer secara
+# default men-download Chromium sendiri saat "npm install", tapi Chromium
+# hasil download itu butuh banyak shared library sistem (libnss3, libatk,
+# libgbm, font, dst) yang TIDAK ada di image Nixpacks minimal Railway --
+# akibatnya proses launch browser gagal di server walau lolos build lokal.
+# Solusi: pakai paket "chromium" dari Nix di atas (sudah bawa semua
+# dependency-nya), lalu suruh Puppeteer SKIP download bawaannya dan pakai
+# binary Chromium dari Nix ini lewat PUPPETEER_EXECUTABLE_PATH.
 [phases.install]
-cmds = ["npm install --include=dev"]
+cmds = [
+    "npm install --include=dev",
+]
+
+[variables]
+PUPPETEER_SKIP_DOWNLOAD = "true"
+PUPPETEER_EXECUTABLE_PATH = "chromium"
 
 [phases.build]
 cmds = ["npm run build"]
