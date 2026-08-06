@@ -1,10 +1,11 @@
 import * as cheerio from 'cheerio';
-import { kuramanimeClient } from '../../helpers/axiosClient';
+import { fetchHtml } from '../../helpers/browserManager';
+import { env } from '../../configs/env';
 import { AnimeCard, GenreItem } from '../../interfaces/anime.interface';
 import { parseAnimeCards } from './cardParser';
 
 export async function getGenreList(): Promise<GenreItem[]> {
-  const { data: html } = await kuramanimeClient.get('/properties/genre');
+  const html = await fetchHtml(`${env.KURAMANIME_URL}/properties/genre`);
   const $ = cheerio.load(html);
 
   const genres: GenreItem[] = [];
@@ -26,9 +27,8 @@ export async function getGenreList(): Promise<GenreItem[]> {
 }
 
 export async function getAnimeByGenre(slug: string, page: number): Promise<AnimeCard[]> {
-  const { data: html } = await kuramanimeClient.get(`/properties/genre/${slug}`, {
-    params: { page },
-  });
+  const url = `${env.KURAMANIME_URL}/properties/genre/${slug}?page=${page}`;
+  const html = await fetchHtml(url);
   const $ = cheerio.load(html);
   return parseAnimeCards($, '#animeList');
 }

@@ -1,5 +1,6 @@
 import * as cheerio from 'cheerio';
-import { kuramanimeClient } from '../../helpers/axiosClient';
+import { fetchHtml } from '../../helpers/browserManager';
+import { env } from '../../configs/env';
 import { AnimeDetail, EpisodeItem, GenreItem } from '../../interfaces/anime.interface';
 
 // Ambil isi satu baris widget info (mis. "Tipe:", "Status:", "Studio:")
@@ -38,7 +39,7 @@ function widgetGenres($: cheerio.CheerioAPI, label: string): GenreItem[] {
 }
 
 export async function getAnimeDetail(animeId: string): Promise<AnimeDetail> {
-  const { data: html } = await kuramanimeClient.get(`/anime/${animeId}`);
+  const html = await fetchHtml(`${env.KURAMANIME_URL}/anime/${animeId}`);
   const $ = cheerio.load(html);
 
   const title = $('.anime__details__title h3').first().text().replace(/\s+/g, ' ').trim();

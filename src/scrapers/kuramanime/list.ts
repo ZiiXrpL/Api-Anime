@@ -1,10 +1,11 @@
 import * as cheerio from 'cheerio';
-import { kuramanimeClient } from '../../helpers/axiosClient';
+import { fetchHtml } from '../../helpers/browserManager';
+import { env } from '../../configs/env';
 import { AnimeCard, HomeData } from '../../interfaces/anime.interface';
 import { parseAnimeCards } from './cardParser';
 
 export async function getHome(): Promise<HomeData> {
-  const { data: html } = await kuramanimeClient.get('/');
+  const html = await fetchHtml(env.KURAMANIME_URL);
   const $ = cheerio.load(html);
 
   // Beranda Kuramanime berisi 3 blok ".trending__product" berurutan:
@@ -53,16 +54,15 @@ export async function getHome(): Promise<HomeData> {
       completed = cards;
     }
     // "Film Layar Lebar" (movie) sengaja tidak dipakai di HomeData -- ada
-    // endpoint getMovies() sendiri buat itu, sama seperti Otakudesu/Samehadaku.
+    // endpoint getMovies() sendiri buat itu.
   });
 
   return { ongoing, completed };
 }
 
 async function getQuickList(category: 'ongoing' | 'finished' | 'movie', page: number): Promise<AnimeCard[]> {
-  const { data: html } = await kuramanimeClient.get(`/quick/${category}`, {
-    params: { order_by: 'updated', page },
-  });
+  const url = `${env.KURAMANIME_URL}/quick/${category}?order_by=updated&page=${page}`;
+  const html = await fetchHtml(url);
   const $ = cheerio.load(html);
   return parseAnimeCards($, '#animeList');
 }
