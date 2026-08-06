@@ -3,21 +3,23 @@ import { fetchHtml } from '../../helpers/browserManager';
 import { env } from '../../configs/env';
 import { AnimeCard, HomeData } from '../../interfaces/anime.interface';
 import { parseAnimeCards } from './cardParser';
+import { logger } from '../../utils/logger';
 
 export async function getHome(): Promise<HomeData> {
   const html = await fetchHtml(env.KURAMANIME_URL);
   const $ = cheerio.load(html);
 
-  // Beranda Kuramanime berisi 3 blok ".trending__product" berurutan:
-  // Sedang Tayang, Selesai Tayang, Film Layar Lebar. Dicocokkan lewat teks
-  // <h4> supaya tidak tergantung urutan kalau suatu saat berubah.
   const blocks = $('.trending__product');
   let ongoing: AnimeCard[] = [];
   let completed: AnimeCard[] = [];
 
+  logger.info(`[DIAGNOSTIK getHome] Jumlah .trending__product ditemukan: ${blocks.length}`);
+
   blocks.each((_, el) => {
     const heading = $(el).find('h4').first().text().trim().toLowerCase();
     const $gallery = $(el).find('.filter__gallery').first();
+    const linkCount = $gallery.find('a[href*="/anime/"]').length;
+    logger.info(`[DIAGNOSTIK getHome] Blok heading="${heading}", jumlah .filter__gallery=${$gallery.length}, jumlah link anime di dalamnya=${linkCount}`);
     const cards: AnimeCard[] = [];
 
     $gallery.find('a[href*="/anime/"]').each((__, a) => {
@@ -53,8 +55,6 @@ export async function getHome(): Promise<HomeData> {
     } else if (heading.includes('selesai tayang')) {
       completed = cards;
     }
-    // "Film Layar Lebar" (movie) sengaja tidak dipakai di HomeData -- ada
-    // endpoint getMovies() sendiri buat itu.
   });
 
   return { ongoing, completed };
