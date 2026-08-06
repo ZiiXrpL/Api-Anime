@@ -1,4 +1,6 @@
 import puppeteer, { Browser, Page } from 'puppeteer';
+import { execSync } from 'child_process';
+import { existsSync } from 'fs';
 import { logger } from '../utils/logger';
 
 // FIX (dukungan Kuramanime): Kuramanime menaruh link video & unduhan di
@@ -17,9 +19,55 @@ import { logger } from '../utils/logger';
 
 let browserPromise: Promise<Browser> | null = null;
 let launchFailureCount = 0;
+let resolvedExecutablePath: string | null | undefined; // undefined = belum dicoba resolve
+
+// FIX (error "Browser was not found at the configured executablePath
+// (chromium)"): Puppeteer TIDAK mencari executable lewat PATH kayak shell
+// biasa -- dia butuh path FILE LENGKAP (absolute path) yang benar-benar
+// ada, bukan cuma nama command seperti "chromium". Nixpacks menaruh paket
+// Nix (termasuk chromium) di lokasi yang panjang & acak di /nix/store/...,
+// jadi path pastinya TIDAK BISA ditebak/di-hardcode di awal -- harus
+// dicari saat aplikasi jalan pakai `which`, yang membaca PATH sistem
+// container itu sendiri.
+function resolveExecutablePath(): string | undefined {
+  if (resolvedExecutablePath !== undefined) {
+    return resolvedExecutablePath ?? undefined;
+  }
+
+  // 1) Kalau PUPPETEER_EXECUTABLE_PATH memang sudah berupa path file yang
+  //    valid (bukan cuma nama command), pakai itu apa adanya.
+  const envPath = process.env.PUPPETEER_EXECUTABLE_PATH;
+  if (envPath && existsSync(envPath)) {
+    resolvedExecutablePath = envPath;
+    logger.info(`Chromium ditemukan lewat PUPPETEER_EXECUTABLE_PATH: ${envPath}`);
+    return resolvedExecutablePath;
+  }
+
+  // 2) Coba cari lewat `which` untuk beberapa nama command yang umum
+  //    dipakai paket Chromium/Chrome di berbagai distro/Nix.
+  const candidates = ['chromium', 'chromium-browser', 'google-chrome-stable', 'google-chrome'];
+  for (const cmd of candidates) {
+    try {
+      const found = execSync(`command -v ${cmd}`, { encoding: 'utf-8' }).trim();
+      if (found && existsSync(found)) {
+        resolvedExecutablePath = found;
+        logger.info(`Chromium ditemukan lewat "command -v ${cmd}": ${found}`);
+        return resolvedExecutablePath;
+      }
+    } catch {
+      // command tidak ada, coba kandidat berikutnya
+    }
+  }
+
+  // 3) Tidak ketemu sama sekali -- biarkan undefined supaya Puppeteer pakai
+  //    Chromium bawaannya sendiri (kalau ada, hasil download saat install).
+  logger.warn('Tidak menemukan Chromium sistem lewat PUPPETEER_EXECUTABLE_PATH maupun `which` -- fallback ke Chromium bawaan Puppeteer (kalau ter-download).');
+  resolvedExecutablePath = null;
+  return undefined;
+}
 
 async function launchBrowser(): Promise<Browser> {
-  const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || undefined;
+  const executablePath = resolveExecutablePath();
 
   const browser = await puppeteer.launch({
     headless: true,
