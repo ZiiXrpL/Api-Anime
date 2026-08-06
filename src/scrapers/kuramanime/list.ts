@@ -14,6 +14,12 @@ export async function getHome(): Promise<HomeData> {
   let completed: AnimeCard[] = [];
 
   logger.info(`[DIAGNOSTIK getHome] Jumlah .trending__product ditemukan: ${blocks.length}`);
+  logger.info(`[DIAGNOSTIK getHome] Jumlah .filter__gallery di SELURUH dokumen: ${$('.filter__gallery').length}`);
+  logger.info(`[DIAGNOSTIK getHome] Jumlah link /anime/ di SELURUH dokumen: ${$('a[href*="/anime/"]').length}`);
+  if (blocks.length > 0) {
+    const firstBlockHtml = $.html(blocks.first());
+    logger.info(`[DIAGNOSTIK getHome] Cuplikan HTML blok pertama (800 karakter): ${firstBlockHtml.slice(0, 800)}`);
+  }
 
   blocks.each((_, el) => {
     const heading = $(el).find('h4').first().text().trim().toLowerCase();
