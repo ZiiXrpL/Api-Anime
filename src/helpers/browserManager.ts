@@ -127,26 +127,3 @@ export async function newPage(): Promise<Page> {
   });
   return page;
 }
-
-// FIX (masalah "listing/genre/search/detail selalu kosong di server,
-// padahal sampel HTML dari browser asli lengkap"): endpoint episode yang
-// pakai Puppeteer TERBUKTI berhasil, sementara endpoint lain yang masih
-// pakai request HTTP polos (axios/cheerio) selalu kosong. Ini pola khas
-// proteksi anti-bot (mis. Cloudflare) yang mengizinkan browser sungguhan
-// tapi menahan/mengosongkan konten untuk client non-browser. Solusinya:
-// pakai browser sungguhan juga untuk halaman-halaman ini, bukan cuma untuk
-// episode. Lebih berat & lambat dari axios biasa, tapi jauh lebih mungkin
-// benar-benar dapat konten asli.
-export async function fetchHtml(url: string): Promise<string> {
-  const page = await newPage();
-  try {
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    // Kasih sedikit waktu jaga-jaga kalau ada konten yang baru muncul
-    // setelah DOM awal siap (mis. proteksi Cloudflare yang butuh beberapa
-    // detik sebelum redirect ke halaman asli).
-    await page.waitForSelector('body', { timeout: 5000 }).catch(() => {});
-    return await page.content();
-  } finally {
-    await page.close().catch(() => {});
-  }
-}
