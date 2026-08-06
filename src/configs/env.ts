@@ -21,7 +21,8 @@ export const env = {
   PORT: getEnvNumber('PORT', 3000),
   NODE_ENV: getEnv('NODE_ENV', 'development'),
 
-  KURAMANIME_URL: getEnv('KURAMANIME_URL', 'https://v9.kuramanime.work'),
+  OTAKUDESU_URL: getEnv('OTAKUDESU_URL', 'https://otakudesu.cloud'),
+  SAMEHADAKU_URL: getEnv('SAMEHADAKU_URL', 'https://v2.samehadaku.how'),
 
   CACHE_TTL_HOME: getEnvNumber('CACHE_TTL_HOME', 600),
   CACHE_TTL_LIST: getEnvNumber('CACHE_TTL_LIST', 1800),

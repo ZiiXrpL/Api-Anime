@@ -3,8 +3,11 @@ import { animeService } from '../services/anime.service';
 import { sendSuccess, sendError } from '../utils/responseBuilder';
 
 export async function getGenresController(_req: Request, res: Response): Promise<void> {
-  const result = await animeService.getGenreList();
-  sendSuccess(res, { source: result.source, data: result.data });
+  // Pakai daftar genre GABUNGAN (bukan hasil satu sumber saja) supaya slug
+  // yang dikirim ke frontend selalu bisa di-resolve balik ke sumber yang
+  // benar oleh getAnimeByGenre(), baik dia dari Otakudesu maupun Samehadaku.
+  const data = await animeService.getCombinedGenreList();
+  sendSuccess(res, { source: 'Gabungan', data });
 }
 
 export async function getAnimeByGenreController(req: Request, res: Response): Promise<void> {
