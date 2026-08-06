@@ -1,7 +1,11 @@
-import puppeteer, { Browser, Page } from 'puppeteer';
+import { Browser, Page } from 'puppeteer';
+import puppeteerExtra from 'puppeteer-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import { execSync } from 'child_process';
 import { existsSync } from 'fs';
 import { logger } from '../utils/logger';
+
+puppeteerExtra.use(StealthPlugin());
 
 let browserPromise: Promise<Browser> | null = null;
 let launchFailureCount = 0;
@@ -41,7 +45,7 @@ function resolveExecutablePath(): string | undefined {
 async function launchBrowser(): Promise<Browser> {
   const executablePath = resolveExecutablePath();
 
-  const browser = await puppeteer.launch({
+  const browser = await puppeteerExtra.launch({
     headless: true,
     executablePath,
     args: [
@@ -51,8 +55,9 @@ async function launchBrowser(): Promise<Browser> {
       '--disable-gpu',
       '--single-process',
       '--no-zygote',
+      '--disable-blink-features=AutomationControlled',
     ],
-  });
+  }) as unknown as Browser;
 
   browser.on('disconnected', () => {
     logger.warn('Browser Puppeteer terputus -- akan di-launch ulang di request berikutnya.');
@@ -81,31 +86,33 @@ export async function newPage(): Promise<Page> {
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
   );
   await page.setViewport({ width: 1280, height: 800 });
-  await page.setRequestInterception(true);
-  page.on('request', (req) => {
-    const type = req.resourceType();
-    if (type === 'image' || type === 'font' || type === 'media' || type === 'stylesheet') {
-      req.abort().catch(() => {});
-    } else {
-      req.continue().catch(() => {});
-    }
-  });
   return page;
 }
+
+const CLOUDFLARE_TITLE_MARKERS = ['just a moment', 'attention required', 'checking your browser'];
 
 export async function fetchHtml(url: string): Promise<string> {
   const page = await newPage();
   try {
-    const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await page.waitForSelector('body', { timeout: 5000 }).catch(() => {});
+    let response = await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+    let title = await page.title().catch(() => '');
+
+    let attempt = 0;
+    while (CLOUDFLARE_TITLE_MARKERS.some((m) => title.toLowerCase().includes(m)) && attempt < 4) {
+      attempt += 1;
+      logger.warn(`[Cloudflare] Kena halaman tantangan untuk ${url}, menunggu & coba lagi (percobaan ke-${attempt})...`);
+      await new Promise((resolve) => setTimeout(resolve, 4000));
+      response = await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 }).catch(() => response);
+      title = await page.title().catch(() => '');
+    }
+
     const html = await page.content();
 
-    const title = await page.title().catch(() => '(gagal ambil title)');
     logger.info(
-      `[DIAGNOSTIK Puppeteer] GET ${url} -> HTTP ${response?.status() ?? '?'}, title="${title}", panjang HTML=${html.length}`,
+      `[DIAGNOSTIK Puppeteer] GET ${url} -> HTTP ${response?.status() ?? '?'}, title="${title}", panjang HTML=${html.length}, percobaan=${attempt}`,
     );
     if (html.length < 3000) {
-      logger.warn(`[DIAGNOSTIK Puppeteer] HTML mencurigakan pendek untuk ${url} -- kemungkinan diblokir/redirect/challenge. Cuplikan: ${html.slice(0, 500)}`);
+      logger.warn(`[DIAGNOSTIK Puppeteer] HTML mencurigakan pendek untuk ${url} -- kemungkinan masih diblokir/challenge. Cuplikan: ${html.slice(0, 500)}`);
     }
 
     return html;
