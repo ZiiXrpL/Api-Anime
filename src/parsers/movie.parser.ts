@@ -207,6 +207,191 @@ export function parseYearList(html: string, source: MovieSourceConfig): MovieYea
   return years;
 }
 
+// ============================================================================
+// PARSER NATGEO (JSON tersuntik) — dipakai kalau source.parserType ===
+// 'natgeo-json'. Situs nationalgeographic.com menaruh seluruh state halaman
+// (termasuk url gambar ASLI, yang tidak ada di HTML/<img> biasa karena
+// lazy-load React) sebagai satu blok JSON:
+//   <script>window['__CONFIG__']={...JSON raksasa...}</script>
+// Parser di bawah ini TIDAK memakai cheerio/selector sama sekali — cukup
+// ekstrak teks JSON-nya lalu JSON.parse, kemudian jalan-jalani (walk)
+// objeknya secara rekursif buat mengumpulkan semua "kartu artikel".
+// ============================================================================
+
+const NATGEO_CONFIG_MARKER = "window['__CONFIG__']=";
+
+/**
+ * Ekstrak & parse blok JSON window['__CONFIG__']={...} dari HTML mentah.
+ * Dicari manual (bukan regex sederhana) dengan menghitung depth kurung
+ * kurawal supaya tetap benar meski JSON-nya berisi banyak nested object
+ * dan string yang mengandung karakter "{"/"}" di dalamnya.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function extractNatGeoConfig(html: string): any | null {
+  const idx = html.indexOf(NATGEO_CONFIG_MARKER);
+  if (idx === -1) return null;
+  const jsonStart = idx + NATGEO_CONFIG_MARKER.length;
+
+  let depth = 0;
+  let inString = false;
+  let escapeNext = false;
+  let end = -1;
+
+  for (let i = jsonStart; i < html.length; i++) {
+    const ch = html[i];
+    if (escapeNext) {
+      escapeNext = false;
+      continue;
+    }
+    if (ch === '\\') {
+      escapeNext = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) {
+        end = i + 1;
+        break;
+      }
+    }
+  }
+
+  if (end === -1) return null;
+
+  try {
+    return JSON.parse(html.slice(jsonStart, end));
+  } catch {
+    return null;
+  }
+}
+
+interface NatGeoArticleRaw {
+  title: string;
+  url: string;
+  poster: string;
+  abstract?: string;
+  tags: string[];
+}
+
+/**
+ * Jalan-jalani (walk) JSON hasil extractNatGeoConfig secara rekursif,
+ * mengumpulkan tiap object yang "berbentuk" kartu artikel: punya title,
+ * img.src, dan url artikel (dari ctas[0].url, atau field url/href
+ * langsung). Pendekatan rekursif generik dipakai (bukan path field yang
+ * di-hardcode) karena NatGeo menaruh kartu yang sama di banyak tempat
+ * berbeda di JSON (nav dropdown, carousel, grid utama, dst) dengan
+ * kedalaman nesting yang bisa beda-beda antar halaman.
+ */
+function collectNatGeoArticles(node: unknown, seenUrls: Set<string>, out: NatGeoArticleRaw[]): void {
+  if (!node || typeof node !== 'object') return;
+
+  if (Array.isArray(node)) {
+    for (const item of node) collectNatGeoArticles(item, seenUrls, out);
+    return;
+  }
+
+  const obj = node as Record<string, unknown>;
+
+  const title = typeof obj.title === 'string' ? obj.title.trim() : '';
+  const img = obj.img as Record<string, unknown> | undefined;
+  const posterSrc = img && typeof img.src === 'string' ? img.src : '';
+  const ctas = Array.isArray(obj.ctas) ? (obj.ctas as Record<string, unknown>[]) : undefined;
+  const ctaUrl = ctas && ctas.length > 0 && typeof ctas[0]?.url === 'string' ? (ctas[0].url as string) : '';
+  const directUrl = typeof obj.url === 'string' ? obj.url : '';
+  const href = typeof obj.href === 'string' ? obj.href : '';
+  const url = ctaUrl || directUrl || href;
+
+  // Hanya ambil yang benar-benar artikel (path-nya mengandung "/article/")
+  // supaya tidak ikut kebawa link section/nav/footer yang juga punya title.
+  if (title && posterSrc && url && /\/article\//.test(url) && !seenUrls.has(url)) {
+    seenUrls.add(url);
+    const rawTags = Array.isArray(obj.tags) ? (obj.tags as Record<string, unknown>[]) : [];
+    const tags = rawTags
+      .map((t) => (typeof t?.name === 'string' ? t.name.trim() : ''))
+      .filter((t) => t !== '');
+    const abstract = typeof obj.abstract === 'string' ? obj.abstract.trim() : undefined;
+    out.push({ title, url, poster: posterSrc, abstract, tags });
+  }
+
+  for (const key of Object.keys(obj)) {
+    collectNatGeoArticles(obj[key], seenUrls, out);
+  }
+}
+
+function natGeoArticleToCard(a: NatGeoArticleRaw): MovieCard {
+  return {
+    title: a.title,
+    slug: slugFromUrl(a.url),
+    poster: a.poster,
+    url: a.url,
+    quality: undefined,
+    rating: undefined,
+    year: undefined,
+    type: a.tags[0] || 'Article',
+  };
+}
+
+/** Daftar kartu artikel NatGeo dari satu halaman (dipakai buat home & list). */
+export function parseNatGeoList(html: string): MovieCard[] {
+  const config = extractNatGeoConfig(html);
+  if (!config) return [];
+  const seen = new Set<string>();
+  const raws: NatGeoArticleRaw[] = [];
+  collectNatGeoArticles(config, seen, raws);
+  return raws.map(natGeoArticleToCard);
+}
+
+export function parseNatGeoHome(html: string): MovieHomeData {
+  const all = parseNatGeoList(html);
+  // NatGeo tidak punya widget "populer" terpisah dari "terbaru" di halaman
+  // section seperti ini -> popular dikosongkan, semua masuk latest.
+  return { latest: all, popular: [] };
+}
+
+/**
+ * Cari 1 artikel spesifik (by slug segmen terakhir) dari config JSON sebuah
+ * halaman, lalu petakan ke MovieDetail. `movieScraper.fetchDetail` yang
+ * menentukan section mana yang dicoba (lihat catatan di sana).
+ */
+export function parseNatGeoDetail(html: string, id: string): MovieDetail | null {
+  const config = extractNatGeoConfig(html);
+  if (!config) return null;
+
+  const seen = new Set<string>();
+  const raws: NatGeoArticleRaw[] = [];
+  collectNatGeoArticles(config, seen, raws);
+
+  const match = raws.find((a) => slugFromUrl(a.url) === id);
+  if (!match) return null;
+
+  return {
+    title: match.title,
+    slug: id,
+    poster: match.poster,
+    synopsis: match.abstract,
+    rating: undefined,
+    quality: undefined,
+    duration: undefined,
+    releaseYear: undefined,
+    country: undefined,
+    director: undefined,
+    cast: [],
+    genres: match.tags.map((name) => ({
+      name,
+      slug: name.toLowerCase().replace(/\s+/g, '-'),
+      url: '',
+    })),
+    streamServers: [],
+    downloadList: [],
+  };
+}
+
 export function parseMovieDetail(html: string, source: MovieSourceConfig, id: string): MovieDetail {
   const $ = cheerio.load(html);
   const d = source.selectors.detail;
