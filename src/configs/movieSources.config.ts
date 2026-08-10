@@ -128,16 +128,6 @@ export interface MovieSourceConfig {
   natgeoSections?: { name: string; slug: string; path: string }[];
 }
 
-function buildQuery(filters?: MovieListFilters): string {
-  if (!filters) return '';
-  const params = new URLSearchParams();
-  if (filters.genre) params.set('genre', filters.genre);
-  if (filters.country) params.set('country', filters.country);
-  if (filters.year) params.set('year', filters.year);
-  const qs = params.toString();
-  return qs ? `?${qs}` : '';
-}
-
 const NATGEO_SECTIONS: { name: string; slug: string; path: string }[] = [
   { name: 'Animals', slug: 'animals', path: '/animals' },
   { name: 'Science & Nature', slug: 'science', path: '/science' },

@@ -11,6 +11,21 @@ import {
   MovieYearItem,
 } from '../interfaces/movie.interface';
 
+// Fungsi-fungsi parser CSS (parseCardsWithin, parseHome, parseGenreList,
+// dst di bawah) hanya dipanggil scraper saat source.parserType === 'css'
+// (lihat movieScraper.ts) — tapi `selectors` sekarang opsional di tipe
+// MovieSourceConfig (supaya source berbasis JSON seperti NatGeo tidak
+// wajib mengisinya). Helper ini yang memastikan ke TypeScript (dan runtime)
+// bahwa `selectors` pasti ada sebelum dipakai fungsi-fungsi CSS tsb.
+function requireSelectors(source: MovieSourceConfig): NonNullable<MovieSourceConfig['selectors']> {
+  if (!source.selectors) {
+    throw new Error(
+      `Source "${source.name}" tidak punya "selectors" tapi dipakai lewat parser CSS — set parserType yang benar di movieSources.config.ts`,
+    );
+  }
+  return source.selectors;
+}
+
 function slugFromUrl(url: string | undefined): string {
   if (!url) return '';
   const clean = url.split('?')[0]?.replace(/\/$/, '') ?? '';
@@ -47,7 +62,7 @@ function resolveUrl(possiblyRelative: string | undefined, baseURL: string): stri
  * MovieSourceConfig. `scopeSelector` kosong berarti cari di seluruh dokumen.
  */
 function parseCardsWithin($: cheerio.CheerioAPI, scopeSelector: string, source: MovieSourceConfig): MovieCard[] {
-  const { list } = source.selectors;
+  const { list } = requireSelectors(source);
   const posterAttr = list.posterAttr || 'src';
   const cards: MovieCard[] = [];
   const seen = new Set<string>();
@@ -149,7 +164,7 @@ export function parseSearchApiResponse(json: any, thumbnailUrl: string): MovieCa
 
 export function parseHome(html: string, source: MovieSourceConfig): MovieHomeData {
   const $ = cheerio.load(html);
-  const { home } = source.selectors;
+  const { home } = requireSelectors(source);
 
   const hasLatestContainer = $(home.latestContainer).length > 0;
   const hasPopularContainer = $(home.popularContainer).length > 0;
@@ -164,7 +179,7 @@ export function parseGenreList(html: string, source: MovieSourceConfig): MovieGe
   const $ = cheerio.load(html);
   const genres: MovieGenreItem[] = [];
   const seen = new Set<string>();
-  $(source.selectors.genreListItem).each((_, el) => {
+  $(requireSelectors(source).genreListItem).each((_, el) => {
     const $el = $(el);
     const href = $el.attr('href') || '';
     const name = $el.text().trim();
@@ -180,7 +195,7 @@ export function parseCountryList(html: string, source: MovieSourceConfig): Movie
   const $ = cheerio.load(html);
   const countries: MovieCountryItem[] = [];
   const seen = new Set<string>();
-  $(source.selectors.countryListItem).each((_, el) => {
+  $(requireSelectors(source).countryListItem).each((_, el) => {
     const $el = $(el);
     const href = $el.attr('href') || '';
     const name = $el.text().trim();
@@ -196,7 +211,7 @@ export function parseYearList(html: string, source: MovieSourceConfig): MovieYea
   const $ = cheerio.load(html);
   const years: MovieYearItem[] = [];
   const seen = new Set<string>();
-  $(source.selectors.yearListItem).each((_, el) => {
+  $(requireSelectors(source).yearListItem).each((_, el) => {
     const $el = $(el);
     const href = $el.attr('href') || '';
     const year = $el.text().trim();
@@ -394,7 +409,7 @@ export function parseNatGeoDetail(html: string, id: string): MovieDetail | null 
 
 export function parseMovieDetail(html: string, source: MovieSourceConfig, id: string): MovieDetail {
   const $ = cheerio.load(html);
-  const d = source.selectors.detail;
+  const d = requireSelectors(source).detail;
   const posterAttr = d.posterAttr || 'src';
 
   const genres: MovieGenreItem[] = [];
