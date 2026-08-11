@@ -22,3 +22,4 @@ function createClient(baseURL: string): AxiosInstance {
 
 export const otakudesuClient = createClient(env.OTAKUDESU_URL);
 export const samehadakuClient = createClient(env.SAMEHADAKU_URL);
+export const nimegamiClient = createClient(env.NIMEGAMI_URL);

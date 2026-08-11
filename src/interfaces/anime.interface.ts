@@ -21,15 +21,12 @@ export interface GenreItem {
   url: string;
 }
 
-// Genre item gabungan dari kedua sumber (Otakudesu & Samehadaku), dipakai
-// supaya getAnimeByGenre() selalu memanggil tiap sumber dengan SLUG ASLI
-// milik sumber itu sendiri, bukan slug dari sumber lain yang formatnya
-// bisa beda (mis. "isekai" vs "isekai-2") sehingga hasilnya kosong.
 export interface CombinedGenreItem {
   name: string;
-  slug: string; // slug "utama" yang ditampilkan/dipakai di URL publik
+  slug: string;
   otakudesuSlug?: string;
   samehadakuSlug?: string;
+  nimegamiSlug?: string;
 }
 
 export interface EpisodeItem {
