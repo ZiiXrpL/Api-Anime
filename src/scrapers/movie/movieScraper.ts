@@ -29,6 +29,25 @@ function isNatGeoJson(source: MovieSourceConfig): boolean {
   return source.parserType === 'natgeo-json';
 }
 
+/**
+ * DIAGNOSTIK (sementara): dipanggil kalau parseNatGeoHome/List balik kosong,
+ * supaya kelihatan di Railway logs apa sebenarnya yang diterima server
+ * (bukan browser HP) dari NatGeo — dugaan utama: NatGeo mendeteksi IP
+ * datacenter Railway dan membalas halaman berbeda (blokir/interstitial/
+ * halaman tanpa window['__CONFIG__']) dibanding saat diakses dari HP biasa.
+ * Setelah penyebabnya jelas dari log, blok diagnostik ini bisa dicabut lagi.
+ */
+function logDiagnostic(source: MovieSourceConfig, html: string): void {
+  const hasMarker = html.includes("window['__CONFIG__']=");
+  const titleMatch = html.match(/<title[^>]*>([^<]*)<\/title>/i);
+  logger.warn(`${source.name}: hasil parse kosong — diagnostik HTML`, {
+    htmlLength: html.length,
+    hasConfigMarker: hasMarker,
+    pageTitle: titleMatch ? titleMatch[1] : '(tidak ketemu tag <title>)',
+    first500Chars: html.slice(0, 500),
+  });
+}
+
 async function fetchHtml(source: MovieSourceConfig, path: string): Promise<string> {
   try {
     const client = getMovieHttpClient(source.baseURL);
@@ -41,7 +60,13 @@ async function fetchHtml(source: MovieSourceConfig, path: string): Promise<strin
 
 export async function fetchHome(source: MovieSourceConfig): Promise<MovieHomeData> {
   const html = await fetchHtml(source, source.paths.home);
-  if (isNatGeoJson(source)) return MovieParser.parseNatGeoHome(html);
+  if (isNatGeoJson(source)) {
+    const result = MovieParser.parseNatGeoHome(html);
+    if (result.latest.length === 0 && result.popular.length === 0) {
+      logDiagnostic(source, html);
+    }
+    return result;
+  }
   return MovieParser.parseHome(html, source);
 }
 
@@ -51,7 +76,11 @@ export async function fetchList(
   filters?: MovieListFilters,
 ): Promise<MovieCard[]> {
   const html = await fetchHtml(source, source.paths.list(page, filters));
-  if (isNatGeoJson(source)) return MovieParser.parseNatGeoList(html);
+  if (isNatGeoJson(source)) {
+    const result = MovieParser.parseNatGeoList(html);
+    if (result.length === 0) logDiagnostic(source, html);
+    return result;
+  }
   return MovieParser.parseMovieList(html, source);
 }
 
