@@ -28,6 +28,9 @@ import * as SamehadakuEpisode from '../scrapers/samehadaku/episode';
 import * as SamehadakuStream from '../scrapers/samehadaku/stream';
 import * as SamehadakuDownload from '../scrapers/samehadaku/download';
 
+import * as NimegamiHome from '../scrapers/nimegami/home';
+import * as NimegamiOngoing from '../scrapers/nimegami/ongoing';
+import * as NimegamiCompleted from '../scrapers/nimegami/completed';
 import * as NimegamiGenre from '../scrapers/nimegami/genre';
 import * as NimegamiSearch from '../scrapers/nimegami/search';
 import * as NimegamiDetail from '../scrapers/nimegami/detail';
@@ -56,19 +59,31 @@ function normalizeGenreName(name: string): string {
 export const animeService = {
   getHome(): Promise<SourceResult<HomeData>> {
     return cacheManager.wrap('home', CACHE_TTL.HOME, () =>
-      withFallback(OtakudesuHome.getHome, SamehadakuHome.getHome),
+      withFallbackChain([
+        { source: 'Nimegami', fetcher: NimegamiHome.getHome },
+        { source: 'Otakudesu', fetcher: OtakudesuHome.getHome },
+        { source: 'Samehadaku', fetcher: SamehadakuHome.getHome },
+      ]),
     );
   },
 
   getOngoing(page: number): Promise<SourceResult<AnimeCard[]>> {
     return cacheManager.wrap(`ongoing:${page}`, CACHE_TTL.LIST, () =>
-      withFallback(() => OtakudesuOngoing.getOngoing(page), () => SamehadakuOngoing.getOngoing(page)),
+      withFallbackChain([
+        { source: 'Nimegami', fetcher: () => NimegamiOngoing.getOngoing(page) },
+        { source: 'Otakudesu', fetcher: () => OtakudesuOngoing.getOngoing(page) },
+        { source: 'Samehadaku', fetcher: () => SamehadakuOngoing.getOngoing(page) },
+      ]),
     );
   },
 
   getCompleted(page: number): Promise<SourceResult<AnimeCard[]>> {
     return cacheManager.wrap(`completed:${page}`, CACHE_TTL.LIST, () =>
-      withFallback(() => OtakudesuCompleted.getCompleted(page), () => SamehadakuCompleted.getCompleted(page)),
+      withFallbackChain([
+        { source: 'Nimegami', fetcher: () => NimegamiCompleted.getCompleted(page) },
+        { source: 'Otakudesu', fetcher: () => OtakudesuCompleted.getCompleted(page) },
+        { source: 'Samehadaku', fetcher: () => SamehadakuCompleted.getCompleted(page) },
+      ]),
     );
   },
 
@@ -84,11 +99,6 @@ export const animeService = {
     );
   },
 
-  // Nimegami dijadikan prioritas PERTAMA untuk search/genre/detail/episode/
-  // stream/download (atas permintaan eksplisit: streaming Otakudesu/Samehadaku
-  // sering gagal karena kena block Cloudflare di host videonya, sedangkan
-  // Nimegami stabil). Otakudesu & Samehadaku tetap dicoba sebagai cadangan
-  // kalau Nimegami down atau anime yang dicari tidak ada di sana.
   getGenreList(): Promise<SourceResult<GenreItem[]>> {
     return cacheManager.wrap('genres', CACHE_TTL.LIST, () =>
       withFallbackChain([
@@ -177,7 +187,6 @@ export const animeService = {
             run: () => SamehadakuGenre.getAnimeByGenre(match.samehadakuSlug as string, page),
           });
         }
-        // Sumber yang slug-nya sama persis dengan yang diklik user dicoba duluan.
         attempts.sort((a, b) => {
           const aMatches =
             (a.source === 'Nimegami' && lower === match.nimegamiSlug?.toLowerCase()) ||
@@ -275,7 +284,7 @@ export const animeService = {
 
   async getRecommendation(): Promise<SourceResult<AnimeCard[]>> {
     return cacheManager.wrap('recommendation', CACHE_TTL.HOME, async () => {
-      const result = await withFallback(OtakudesuHome.getHome, SamehadakuHome.getHome);
+      const result = await this.getHome();
       const pool = [...result.data.ongoing, ...result.data.completed];
       const shuffled = pool.sort(() => Math.random() - 0.5).slice(0, 10);
       return { source: result.source, data: shuffled };
@@ -283,7 +292,7 @@ export const animeService = {
   },
 
   async getRandom(): Promise<SourceResult<AnimeCard>> {
-    const result = await withFallback(OtakudesuHome.getHome, SamehadakuHome.getHome);
+    const result = await this.getHome();
     const pool = [...result.data.ongoing, ...result.data.completed];
     if (pool.length === 0) {
       throw new Error('Tidak ada data anime untuk dipilih secara acak');

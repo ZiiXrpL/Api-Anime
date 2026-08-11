@@ -15,12 +15,23 @@ function slugFromUrl(url: string | undefined): string {
   return parts[parts.length - 1] ?? '';
 }
 
-// Dipakai untuk halaman search (?s=) DAN halaman genre/category — keduanya
-// pakai template arsip yang sama (.archive-a per card).
+// Dipakai untuk halaman search (?s=), genre/category, DAN tag (/tag/on-going/,
+// /tag/complete/). Ada 2 varian markup buat grid yang sama-sama dipakai theme
+// ini:
+//   1) search & category: setiap card = <div class="archive-a"> sendiri-sendiri
+//      (sibling langsung di dalam <div class="archive">).
+//   2) tag archive (ongoing/completed): SATU <div class="archive-a"> membungkus
+//      banyak <article> sekaligus, satu <article> = satu card.
+// Coba varian 2 dulu (article di dalam archive-a); kalau tidak ada article,
+// fallback ke varian 1 (archive-a itu sendiri sebagai card).
 export function parseArchiveList(html: string): AnimeCard[] {
   const $ = cheerio.load(html);
   const list: AnimeCard[] = [];
-  $('.archive-a').each((_, el) => {
+
+  const articleCards = $('.archive-a article');
+  const cards = articleCards.length > 0 ? articleCards : $('.archive-a');
+
+  cards.each((_, el) => {
     const $el = $(el);
     const link = $el.find('.thumbnail a').first();
     const url = link.attr('href') || '';
@@ -32,8 +43,8 @@ export function parseArchiveList(html: string): AnimeCard[] {
       slug: slugFromUrl(url),
       poster: img.attr('src') || img.attr('data-src') || '',
       url,
-      episode: $el.find('.eps-archive').text().trim() || undefined,
-      score: $el.find('.rating-archive').text().replace(/[^\d.]/g, '').trim() || undefined,
+      episode: $el.find('.eps-archive').first().text().trim() || undefined,
+      score: $el.find('.rating-archive').first().text().replace(/[^\d.]/g, '').trim() || undefined,
       status: $el.find('.term_tag-a a').first().text().trim() || undefined,
     });
   });
@@ -64,10 +75,6 @@ export interface NimegamiDetailResult {
   episodes: NimegamiEpisodeRaw[];
 }
 
-// Halaman detail Nimegami memuat SEMUA episode + link streaming (base64 di
-// atribut data="" tiap <li class="select-eps">) dalam satu HTML — beda dari
-// Otakudesu/Samehadaku yang punya halaman episode terpisah. Karena itu parser
-// ini sekaligus mengembalikan daftar episode + stream server-nya.
 export function parseDetail(html: string, animeSlug: string): NimegamiDetailResult {
   const $ = cheerio.load(html);
 
