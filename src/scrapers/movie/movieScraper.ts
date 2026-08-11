@@ -31,21 +31,13 @@ function isNatGeoJson(source: MovieSourceConfig): boolean {
 
 /**
  * DIAGNOSTIK (sementara): dipanggil kalau parseNatGeoHome/List balik kosong,
- * supaya kelihatan di Railway logs apa sebenarnya yang diterima server
- * (bukan browser HP) dari NatGeo — dugaan utama: NatGeo mendeteksi IP
- * datacenter Railway dan membalas halaman berbeda (blokir/interstitial/
- * halaman tanpa window['__CONFIG__']) dibanding saat diakses dari HP biasa.
+ * supaya kelihatan di Railway logs tahap mana yang gagal — marker HTML,
+ * JSON.parse, atau memang tidak ada object yang cocok pola kartu artikel.
  * Setelah penyebabnya jelas dari log, blok diagnostik ini bisa dicabut lagi.
  */
 function logDiagnostic(source: MovieSourceConfig, html: string): void {
-  const hasMarker = html.includes("window['__CONFIG__']=");
-  const titleMatch = html.match(/<title[^>]*>([^<]*)<\/title>/i);
-  logger.warn(`${source.name}: hasil parse kosong — diagnostik HTML`, {
-    htmlLength: html.length,
-    hasConfigMarker: hasMarker,
-    pageTitle: titleMatch ? titleMatch[1] : '(tidak ketemu tag <title>)',
-    first500Chars: html.slice(0, 500),
-  });
+  const diag = MovieParser.diagnoseNatGeo(html);
+  logger.warn(`${source.name}: hasil parse kosong — diagnostik ekstraksi`, diag);
 }
 
 async function fetchHtml(source: MovieSourceConfig, path: string): Promise<string> {

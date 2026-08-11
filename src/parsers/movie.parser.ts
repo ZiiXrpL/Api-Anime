@@ -407,6 +407,87 @@ export function parseNatGeoDetail(html: string, id: string): MovieDetail | null 
   };
 }
 
+export interface NatGeoDiagnostic {
+  /** apakah substring "window['__CONFIG__']=" ketemu di HTML mentah */
+  markerFound: boolean;
+  /** apakah teks setelah marker berhasil di-JSON.parse tanpa error */
+  jsonParsed: boolean;
+  /** kalau JSON.parse berhasil, berapa panjang teks JSON yang diambil (karakter) */
+  jsonTextLength: number;
+  /** key top-level dari object hasil parse (buat lihat apakah strukturnya beda dari yang diharapkan) */
+  configTopLevelKeys: string[];
+  /** ada berapa object yang match pola "kartu artikel" (title+img.src+url yang mengandung /article/) */
+  articlesFound: number;
+  /** judul dari 3 artikel pertama yang ketemu (kalau ada), buat sanity-check cepat */
+  sampleTitles: string[];
+}
+
+/**
+ * DIAGNOSTIK (sementara): membedah proses ekstraksi NatGeo tahap demi tahap
+ * supaya kalau parseNatGeoList/Home balik kosong, keliatan persis di tahap
+ * mana gagalnya — marker tidak ketemu? JSON gagal di-parse? atau JSON-nya
+ * valid tapi tidak ada object yang cocok pola kartu artikel (berarti
+ * struktur JSON NatGeo beda dari yang diasumsikan parser)?
+ * Dipanggil dari movieScraper.ts saat hasil parse kosong.
+ */
+export function diagnoseNatGeo(html: string): NatGeoDiagnostic {
+  const markerFound = html.includes(NATGEO_CONFIG_MARKER);
+
+  const idx = html.indexOf(NATGEO_CONFIG_MARKER);
+  let jsonTextLength = 0;
+  if (idx !== -1) {
+    // Hitung ulang batas JSON pakai logika yang sama seperti
+    // extractNatGeoConfig, cuma di sini kita simpan panjangnya juga.
+    const jsonStart = idx + NATGEO_CONFIG_MARKER.length;
+    let depth = 0;
+    let inString = false;
+    let escapeNext = false;
+    let end = -1;
+    for (let i = jsonStart; i < html.length; i++) {
+      const ch = html[i];
+      if (escapeNext) {
+        escapeNext = false;
+        continue;
+      }
+      if (ch === '\\') {
+        escapeNext = true;
+        continue;
+      }
+      if (ch === '"') {
+        inString = !inString;
+        continue;
+      }
+      if (inString) continue;
+      if (ch === '{') depth++;
+      else if (ch === '}') {
+        depth--;
+        if (depth === 0) {
+          end = i + 1;
+          break;
+        }
+      }
+    }
+    if (end !== -1) jsonTextLength = end - jsonStart;
+  }
+
+  const config = extractNatGeoConfig(html);
+  const jsonParsed = config !== null;
+  const configTopLevelKeys =
+    config && typeof config === 'object' && !Array.isArray(config) ? Object.keys(config as object) : [];
+
+  let articlesFound = 0;
+  let sampleTitles: string[] = [];
+  if (config) {
+    const seen = new Set<string>();
+    const raws: NatGeoArticleRaw[] = [];
+    collectNatGeoArticles(config, seen, raws);
+    articlesFound = raws.length;
+    sampleTitles = raws.slice(0, 3).map((a) => a.title);
+  }
+
+  return { markerFound, jsonParsed, jsonTextLength, configTopLevelKeys, articlesFound, sampleTitles };
+}
+
 export function parseMovieDetail(html: string, source: MovieSourceConfig, id: string): MovieDetail {
   const $ = cheerio.load(html);
   const d = requireSelectors(source).detail;
