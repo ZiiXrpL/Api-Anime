@@ -227,16 +227,16 @@ export function parseYearList(html: string, source: MovieSourceConfig): MovieYea
 // 'natgeo-json'. Situs nationalgeographic.com menaruh seluruh state halaman
 // (termasuk url gambar ASLI, yang tidak ada di HTML/<img> biasa karena
 // lazy-load React) sebagai satu blok JSON:
-//   <script>window['__CONFIG__']={...JSON raksasa...}</script>
+//   <script>window['__natgeo__']={...JSON raksasa...}</script>
 // Parser di bawah ini TIDAK memakai cheerio/selector sama sekali — cukup
 // ekstrak teks JSON-nya lalu JSON.parse, kemudian jalan-jalani (walk)
 // objeknya secara rekursif buat mengumpulkan semua "kartu artikel".
 // ============================================================================
 
-const NATGEO_CONFIG_MARKER = "window['__CONFIG__']=";
+const NATGEO_CONFIG_MARKER = "window['__natgeo__']=";
 
 /**
- * Ekstrak & parse blok JSON window['__CONFIG__']={...} dari HTML mentah.
+ * Ekstrak & parse blok JSON window['__natgeo__']={...} dari HTML mentah.
  * Dicari manual (bukan regex sederhana) dengan menghitung depth kurung
  * kurawal supaya tetap benar meski JSON-nya berisi banyak nested object
  * dan string yang mengandung karakter "{"/"}" di dalamnya.
@@ -408,7 +408,7 @@ export function parseNatGeoDetail(html: string, id: string): MovieDetail | null 
 }
 
 export interface NatGeoDiagnostic {
-  /** apakah substring "window['__CONFIG__']=" ketemu di HTML mentah */
+  /** apakah substring "window['__natgeo__']=" ketemu di HTML mentah */
   markerFound: boolean;
   /** apakah teks setelah marker berhasil di-JSON.parse tanpa error */
   jsonParsed: boolean;
