@@ -54,6 +54,10 @@ export interface StreamServer {
   name: string;
   quality?: string;
   url: string;
+  // URL lewat /stream-proxy milik API sendiri, aman ditanam di <iframe>
+  // frontend (lihat controllers/streamProxy.controller.ts). `url` asli
+  // tetap dikirim juga sebagai fallback "buka di tab baru".
+  embedUrl?: string;
 }
 
 export interface EpisodeDetail {

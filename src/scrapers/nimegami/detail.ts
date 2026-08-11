@@ -44,7 +44,22 @@ function findBestMatch(query: string, results: AnimeCard[]): AnimeCard | null {
   return bestScore >= 0.6 ? best : null;
 }
 
-export async function getAnimeDetail(slug: string): Promise<AnimeDetail> {
+// `allowFuzzyMatch` mengontrol apakah fallback tebak-slug-lewat-search di
+// bawah boleh dipakai. HARUS false saat dipanggil sebagai percobaan
+// PERTAMA di anime.service (getAnimeDetail dicoba Nimegami dulu sebelum
+// Otakudesu/Samehadaku): kalau fuzzy match dibolehkan di percobaan
+// pertama, slug yang sebenarnya milik Otakudesu/Samehadaku (dan API PASTI
+// punya data cocok-persis di sana) malah "keburu" dijawab pakai anime lain
+// di Nimegami yang cuma mirip judulnya (skor overlap kata >= 0.6 dianggap
+// cukup), sebelum Otakudesu/Samehadaku sempat dicoba sama sekali. Ini
+// menyebabkan anime yang salah ikut tampil setelah user search/filter lalu
+// klik, dan jumlah episode yang tampil ikut salah (episode milik anime
+// yang salah, bukan yang diklik). `allowFuzzyMatch: true` hanya boleh
+// dipakai sebagai UPAYA TERAKHIR setelah Nimegami exact, Otakudesu, dan
+// Samehadaku semuanya gagal -- supaya link lama yang memang cuma ada di
+// Nimegami lewat slug non-native masih bisa ketemu, tanpa membajak slug
+// yang harusnya dijawab exact oleh source lain.
+export async function getAnimeDetail(slug: string, allowFuzzyMatch = true): Promise<AnimeDetail> {
   try {
     let html: string;
     let resolvedSlug = slug;
@@ -52,7 +67,7 @@ export async function getAnimeDetail(slug: string): Promise<AnimeDetail> {
     try {
       html = await fetchDetailHtml(slug);
     } catch (err) {
-      if (axios.isAxiosError(err) && err.response?.status === 404) {
+      if (allowFuzzyMatch && axios.isAxiosError(err) && err.response?.status === 404) {
         const query = slugToSearchQuery(slug);
         const results = await searchAnime(query);
         const match = findBestMatch(query, results);

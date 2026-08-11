@@ -1,3 +1,59 @@
+# Update 2026-08-11 — Perbaikan Module Anime (bukan Movie)
+
+Tiga bug dilaporkan khusus di sisi ANIME (module Movie tidak disentuh sama
+sekali di update ini):
+
+## A. Streaming di web loading terus-menerus, tapi jalan kalau dibuka tab baru
+
+**Akar masalah:** persis pola yang sama dengan yang sudah pernah ditemukan
+di module Movie (lihat "Streaming tetap menolak terhubung" di bawah) —
+server streaming pihak ketiga (embed host di balik Otakudesu/Samehadaku/
+Nimegami) memasang header `X-Frame-Options` / `Content-Security-Policy:
+frame-ancestors` yang cuma mengizinkan dirinya ditanam di `<iframe>` dari
+domain keluarga situs asal. Browser SELALU menolak menampilkannya di
+`<iframe>` domain frontend lain — makanya loading terus-menerus, sementara
+membuka URL-nya langsung di tab baru (bukan lewat iframe) berhasil.
+
+**Perbaikan:** endpoint baru `GET /stream-proxy?url=...`
+(`src/controllers/streamProxy.controller.ts`) mengambil konten streaming
+lewat backend sendiri lalu mengirim ulang ke browser TANPA header proteksi
+upstream tsb. Response `/episode/:id` dan `/stream/:id` sekarang punya
+field baru `embedUrl` di tiap item `streamServers` (selain `url` asli) —
+pakai `embedUrl` untuk `<iframe>` di frontend, `url` asli tetap dikirim
+sebagai fallback "buka di tab baru" kalau proxy gagal untuk provider
+tertentu. Ada proteksi SSRF dasar (tolak target ke localhost/IP privat) di
+proxy ini.
+
+## B. Klik hasil search/filter genre kadang menampilkan anime yang salah, dan C. Episode yang tampil tidak sesuai jumlah (mis. "Episode 1–26" tapi cuma tampil 2 episode)
+
+**Akar masalah:** satu penyebab yang sama untuk B dan C.
+`src/scrapers/nimegami/detail.ts` (`getAnimeDetail`) punya fallback
+"tebak": kalau slug (yang aslinya milik Otakudesu/Samehadaku, bukan
+Nimegami) 404 saat dicoba langsung di Nimegami, kode ini mencari anime
+LAIN di Nimegami yang judulnya cuma overlap kata >= 60% dan
+menganggapnya cocok. Masalahnya, `anime.service.ts` (`getAnimeDetail`)
+SELALU mencoba Nimegami LEBIH DULU untuk slug apapun — jadi tebakan yang
+cuma 60% mirip ini "menang" duluan sebelum Otakudesu/Samehadaku (yang
+sebenarnya punya slug PERSIS cocok) sempat dicoba sama sekali. Akibatnya
+anime yang tampil setelah klik hasil search/filter bisa tertukar dengan
+anime lain yang judulnya mirip, lengkap dengan jumlah episode milik anime
+yang salah itu (bukan anime yang sebenarnya diklik).
+
+**Perbaikan:**
+- `scrapers/nimegami/detail.ts` — `getAnimeDetail(slug, allowFuzzyMatch)`
+  sekarang punya parameter untuk mematikan fallback tebak-lewat-search di
+  atas.
+- `services/anime.service.ts` — `getAnimeDetail` sekarang dua tahap: coba
+  exact match dulu di Nimegami (`allowFuzzyMatch: false`), Otakudesu,
+  Samehadaku secara berurutan; fuzzy-match Nimegami (`allowFuzzyMatch:
+  true`) baru dicoba PALING TERAKHIR, hanya kalau ketiga percobaan exact
+  di atas semuanya gagal. Endpoint `/episode/:id`, `/stream/:id`,
+  `/download/:id` tidak terdampak bug ini (slug episode Nimegami wajib
+  berformat `nimegami-{slug}--ep-{n}`, jadi otomatis sudah ter-skip kalau
+  slug bukan dari Nimegami).
+
+---
+
 # Catatan Update — Perbaikan Module Movie (Film)
 
 ## 1. Filter genre/negara/tahun di halaman "Daftar Film" selalu kosong

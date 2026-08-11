@@ -17,6 +17,7 @@ import {
   getDownloadController,
   getBatchController,
 } from '../controllers/episode.controller';
+import { streamProxyController } from '../controllers/streamProxy.controller';
 import {
   getRecommendationController,
   getRandomController,
@@ -56,6 +57,12 @@ router.get('/episode/:id', asyncHandler(getEpisodeController));
 router.get('/stream/:id', asyncHandler(getStreamController));
 router.get('/download/:id', asyncHandler(getDownloadController));
 router.get('/batch/:id', asyncHandler(getBatchController));
+
+// Proxy video/embed player anime supaya bisa ditanam di <iframe> frontend
+// sendiri (lihat controllers/streamProxy.controller.ts untuk alasannya).
+// Sengaja diletakkan di sini (bukan di movie.routes.ts) karena hanya
+// dipakai oleh `embedUrl` pada endpoint stream/episode anime.
+router.get('/stream-proxy', asyncHandler(streamProxyController));
 
 router.get('/recommendation', asyncHandler(getRecommendationController));
 router.get('/random', asyncHandler(getRandomController));
