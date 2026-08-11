@@ -84,21 +84,28 @@ export const animeService = {
     );
   },
 
+  // Nimegami dijadikan prioritas PERTAMA untuk search/genre/detail/episode/
+  // stream/download (atas permintaan eksplisit: streaming Otakudesu/Samehadaku
+  // sering gagal karena kena block Cloudflare di host videonya, sedangkan
+  // Nimegami stabil). Otakudesu & Samehadaku tetap dicoba sebagai cadangan
+  // kalau Nimegami down atau anime yang dicari tidak ada di sana.
   getGenreList(): Promise<SourceResult<GenreItem[]>> {
     return cacheManager.wrap('genres', CACHE_TTL.LIST, () =>
       withFallbackChain([
+        { source: 'Nimegami', fetcher: NimegamiGenre.getGenreList },
         { source: 'Otakudesu', fetcher: OtakudesuGenre.getGenreList },
         { source: 'Samehadaku', fetcher: SamehadakuGenre.getGenreList },
-        { source: 'Nimegami', fetcher: NimegamiGenre.getGenreList },
       ]),
     );
   },
 
-  // Daftar genre GABUNGAN dari ketiga sumber, slug asli tiap sumber disimpan
-  // terpisah supaya getAnimeByGenre() selalu pakai slug yang valid per sumber.
   getCombinedGenreList(): Promise<CombinedGenreItem[]> {
     return cacheManager.wrap<CombinedGenreItem[]>('genres:combined', CACHE_TTL.LIST, async () => {
-      const [otakudesuList, samehadakuList, nimegamiList] = await Promise.all([
+      const [nimegamiList, otakudesuList, samehadakuList] = await Promise.all([
+        NimegamiGenre.getGenreList().catch((err) => {
+          logger.warn(`Gagal ambil genre list Nimegami: ${(err as Error).message}`);
+          return [] as GenreItem[];
+        }),
         OtakudesuGenre.getGenreList().catch((err) => {
           logger.warn(`Gagal ambil genre list Otakudesu: ${(err as Error).message}`);
           return [] as GenreItem[];
@@ -107,17 +114,22 @@ export const animeService = {
           logger.warn(`Gagal ambil genre list Samehadaku: ${(err as Error).message}`);
           return [] as GenreItem[];
         }),
-        NimegamiGenre.getGenreList().catch((err) => {
-          logger.warn(`Gagal ambil genre list Nimegami: ${(err as Error).message}`);
-          return [] as GenreItem[];
-        }),
       ]);
 
       const byName = new Map<string, CombinedGenreItem>();
 
+      for (const g of nimegamiList) {
+        const key = normalizeGenreName(g.name);
+        byName.set(key, { name: g.name, slug: g.slug, nimegamiSlug: g.slug });
+      }
       for (const g of otakudesuList) {
         const key = normalizeGenreName(g.name);
-        byName.set(key, { name: g.name, slug: g.slug, otakudesuSlug: g.slug });
+        const existing = byName.get(key);
+        if (existing) {
+          existing.otakudesuSlug = g.slug;
+        } else {
+          byName.set(key, { name: g.name, slug: g.slug, otakudesuSlug: g.slug });
+        }
       }
       for (const g of samehadakuList) {
         const key = normalizeGenreName(g.name);
@@ -126,15 +138,6 @@ export const animeService = {
           existing.samehadakuSlug = g.slug;
         } else {
           byName.set(key, { name: g.name, slug: g.slug, samehadakuSlug: g.slug });
-        }
-      }
-      for (const g of nimegamiList) {
-        const key = normalizeGenreName(g.name);
-        const existing = byName.get(key);
-        if (existing) {
-          existing.nimegamiSlug = g.slug;
-        } else {
-          byName.set(key, { name: g.name, slug: g.slug, nimegamiSlug: g.slug });
         }
       }
 
@@ -148,14 +151,20 @@ export const animeService = {
       const lower = slug.trim().toLowerCase();
       const match = combined.find(
         (g) =>
+          g.nimegamiSlug?.toLowerCase() === lower ||
           g.otakudesuSlug?.toLowerCase() === lower ||
-          g.samehadakuSlug?.toLowerCase() === lower ||
-          g.nimegamiSlug?.toLowerCase() === lower,
+          g.samehadakuSlug?.toLowerCase() === lower,
       );
 
       if (match) {
-        type Attempt = { source: 'Otakudesu' | 'Samehadaku' | 'Nimegami'; run: () => Promise<AnimeCard[]> };
+        type Attempt = { source: 'Nimegami' | 'Otakudesu' | 'Samehadaku'; run: () => Promise<AnimeCard[]> };
         const attempts: Attempt[] = [];
+        if (match.nimegamiSlug) {
+          attempts.push({
+            source: 'Nimegami',
+            run: () => NimegamiGenre.getAnimeByGenre(match.nimegamiSlug as string, page),
+          });
+        }
         if (match.otakudesuSlug) {
           attempts.push({
             source: 'Otakudesu',
@@ -168,22 +177,16 @@ export const animeService = {
             run: () => SamehadakuGenre.getAnimeByGenre(match.samehadakuSlug as string, page),
           });
         }
-        if (match.nimegamiSlug) {
-          attempts.push({
-            source: 'Nimegami',
-            run: () => NimegamiGenre.getAnimeByGenre(match.nimegamiSlug as string, page),
-          });
-        }
         // Sumber yang slug-nya sama persis dengan yang diklik user dicoba duluan.
         attempts.sort((a, b) => {
           const aMatches =
+            (a.source === 'Nimegami' && lower === match.nimegamiSlug?.toLowerCase()) ||
             (a.source === 'Otakudesu' && lower === match.otakudesuSlug?.toLowerCase()) ||
-            (a.source === 'Samehadaku' && lower === match.samehadakuSlug?.toLowerCase()) ||
-            (a.source === 'Nimegami' && lower === match.nimegamiSlug?.toLowerCase());
+            (a.source === 'Samehadaku' && lower === match.samehadakuSlug?.toLowerCase());
           const bMatches =
+            (b.source === 'Nimegami' && lower === match.nimegamiSlug?.toLowerCase()) ||
             (b.source === 'Otakudesu' && lower === match.otakudesuSlug?.toLowerCase()) ||
-            (b.source === 'Samehadaku' && lower === match.samehadakuSlug?.toLowerCase()) ||
-            (b.source === 'Nimegami' && lower === match.nimegamiSlug?.toLowerCase());
+            (b.source === 'Samehadaku' && lower === match.samehadakuSlug?.toLowerCase());
           return aMatches === bMatches ? 0 : aMatches ? -1 : 1;
         });
 
@@ -197,13 +200,13 @@ export const animeService = {
             logger.warn(`getAnimeByGenre gagal untuk slug "${slug}" (${attempt.source}): ${(err as Error).message}`);
           }
         }
-        return { source: 'Otakudesu', data: [] } as SourceResult<AnimeCard[]>;
+        return { source: 'Nimegami', data: [] } as SourceResult<AnimeCard[]>;
       }
 
       return withFallbackChain([
+        { source: 'Nimegami', fetcher: () => NimegamiGenre.getAnimeByGenre(slug, page) },
         { source: 'Otakudesu', fetcher: () => OtakudesuGenre.getAnimeByGenre(slug, page) },
         { source: 'Samehadaku', fetcher: () => SamehadakuGenre.getAnimeByGenre(slug, page) },
-        { source: 'Nimegami', fetcher: () => NimegamiGenre.getAnimeByGenre(slug, page) },
       ]);
     });
   },
@@ -211,9 +214,9 @@ export const animeService = {
   search(query: string): Promise<SourceResult<AnimeCard[]>> {
     return cacheManager.wrap(`search:${query}`, CACHE_TTL.LIST, () =>
       withFallbackChain([
+        { source: 'Nimegami', fetcher: () => NimegamiSearch.searchAnime(query) },
         { source: 'Otakudesu', fetcher: () => OtakudesuSearch.searchAnime(query) },
         { source: 'Samehadaku', fetcher: () => SamehadakuSearch.searchAnime(query) },
-        { source: 'Nimegami', fetcher: () => NimegamiSearch.searchAnime(query) },
       ]),
     );
   },
@@ -227,9 +230,9 @@ export const animeService = {
   getAnimeDetail(slug: string): Promise<SourceResult<AnimeDetail>> {
     return cacheManager.wrap(`detail:${slug}`, CACHE_TTL.DETAIL, () =>
       withFallbackChain([
+        { source: 'Nimegami', fetcher: () => NimegamiDetail.getAnimeDetail(slug) },
         { source: 'Otakudesu', fetcher: () => OtakudesuDetail.getAnimeDetail(slug) },
         { source: 'Samehadaku', fetcher: () => SamehadakuDetail.getAnimeDetail(slug) },
-        { source: 'Nimegami', fetcher: () => NimegamiDetail.getAnimeDetail(slug) },
       ]),
     );
   },
@@ -237,9 +240,9 @@ export const animeService = {
   getEpisodeDetail(slug: string): Promise<SourceResult<EpisodeDetail>> {
     return cacheManager.wrap(`episode:${slug}`, CACHE_TTL.EPISODE, () =>
       withFallbackChain([
+        { source: 'Nimegami', fetcher: () => NimegamiEpisode.getEpisodeDetail(slug) },
         { source: 'Otakudesu', fetcher: () => OtakudesuEpisode.getEpisodeDetail(slug) },
         { source: 'Samehadaku', fetcher: () => SamehadakuEpisode.getEpisodeDetail(slug) },
-        { source: 'Nimegami', fetcher: () => NimegamiEpisode.getEpisodeDetail(slug) },
       ]),
     );
   },
@@ -247,9 +250,9 @@ export const animeService = {
   getStreamServers(slug: string): Promise<SourceResult<StreamServer[]>> {
     return cacheManager.wrap(`stream:${slug}`, CACHE_TTL.EPISODE, () =>
       withFallbackChain([
+        { source: 'Nimegami', fetcher: () => NimegamiStream.getStreamServers(slug) },
         { source: 'Otakudesu', fetcher: () => OtakudesuStream.getStreamServers(slug) },
         { source: 'Samehadaku', fetcher: () => SamehadakuStream.getStreamServers(slug) },
-        { source: 'Nimegami', fetcher: () => NimegamiStream.getStreamServers(slug) },
       ]),
     );
   },
@@ -257,9 +260,9 @@ export const animeService = {
   getDownloadLinks(slug: string): Promise<SourceResult<DownloadGroup[]>> {
     return cacheManager.wrap(`download:${slug}`, CACHE_TTL.EPISODE, () =>
       withFallbackChain([
+        { source: 'Nimegami', fetcher: () => NimegamiDownload.getDownloadLinks(slug) },
         { source: 'Otakudesu', fetcher: () => OtakudesuDownload.getDownloadLinks(slug) },
         { source: 'Samehadaku', fetcher: () => SamehadakuDownload.getDownloadLinks(slug) },
-        { source: 'Nimegami', fetcher: () => NimegamiDownload.getDownloadLinks(slug) },
       ]),
     );
   },
