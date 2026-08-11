@@ -2,6 +2,7 @@ import { StreamServer } from '../../interfaces/anime.interface';
 import { SourceError } from '../../interfaces/errors.interface';
 import { fetchDetailHtml, parseEpisodeSlug } from './_shared';
 import { parseDetail } from '../../parsers/nimegami.parser';
+import { resolveStreamServers } from './_resolveStream';
 
 export async function getStreamServers(slug: string): Promise<StreamServer[]> {
   const parsed = parseEpisodeSlug(slug);
@@ -13,7 +14,7 @@ export async function getStreamServers(slug: string): Promise<StreamServer[]> {
     const { episodes } = parseDetail(html, parsed.animeSlug);
     const ep = episodes.find((e) => e.number === parsed.episodeNumber);
     if (!ep) throw new Error(`Episode ${parsed.episodeNumber} tidak ditemukan`);
-    return ep.streams;
+    return await resolveStreamServers(ep.streams);
   } catch (error) {
     throw new SourceError('Nimegami', `Gagal mengambil stream servers "${slug}": ${(error as Error).message}`);
   }
