@@ -10,6 +10,13 @@ export interface MovieCard {
   type?: string;
 }
 
+/**
+ * Situs sumber (tema MUVIPRO) tidak punya widget "populer" terpisah dari
+ * "terbaru" di halaman utamanya — cuma satu listing kronologis di
+ * /category/movies/. Jadi `popular` di sini adalah data yang sama dengan
+ * `latest` (bukan hasil scraping section berbeda). Ini didokumentasikan di
+ * movieScraper.ts, bukan ditebak/dipalsukan sebagai section terpisah.
+ */
 export interface MovieHomeData {
   latest: MovieCard[];
   popular: MovieCard[];
@@ -21,32 +28,27 @@ export interface MovieGenreItem {
   url: string;
 }
 
-export interface MovieCountryItem {
+/**
+ * Nama server (mis. "Server 1") yang tersedia untuk sebuah film, TANPA
+ * meng-resolve URL embed-nya. Dipakai di MovieDetail supaya GET
+ * /movie/detail/:slug tetap ringan (1 request) — resolve embed url per
+ * server (butuh request AJAX tambahan per server) baru dilakukan di
+ * GET /movie/watch/:slug.
+ */
+export interface MovieServerOption {
   name: string;
-  slug: string;
-  url: string;
+  tab: string;
 }
 
-export interface MovieYearItem {
-  year: string;
-  url: string;
-}
-
+/** Server yang URL embed-nya sudah di-resolve (dipakai di GET /movie/watch/:slug). */
 export interface MovieStreamServer {
   name: string;
-  quality?: string;
   url: string;
 }
 
 export interface MovieDownloadLink {
   provider: string;
   url: string;
-}
-
-export interface MovieDownloadGroup {
-  quality: string;
-  format?: string;
-  links: MovieDownloadLink[];
 }
 
 export interface MovieDetail {
@@ -56,24 +58,18 @@ export interface MovieDetail {
   synopsis?: string;
   rating?: string;
   quality?: string;
-  duration?: string;
   releaseYear?: string;
   country?: string;
+  language?: string;
   director?: string;
   cast: string[];
   genres: MovieGenreItem[];
-  streamServers: MovieStreamServer[];
-  downloadList: MovieDownloadGroup[];
+  servers: MovieServerOption[];
+  downloadList: MovieDownloadLink[];
 }
 
-/**
- * Filter opsional yang bisa dipakai saat mengambil daftar film utama (GET /movies).
- * Dipakai bersama endpoint list untuk memberi nilai tambah pada
- * GET /movies/country dan GET /movies/year tanpa menambah route baru
- * di luar yang diminta.
- */
-export interface MovieListFilters {
-  genre?: string;
-  country?: string;
-  year?: string;
+export interface MovieWatchData {
+  title: string;
+  slug: string;
+  servers: MovieStreamServer[];
 }

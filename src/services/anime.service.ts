@@ -237,18 +237,11 @@ export const animeService = {
   },
 
   getAnimeDetail(slug: string): Promise<SourceResult<AnimeDetail>> {
-    // Urutan sengaja: exact match dulu di ketiga source (Nimegami tanpa
-    // fuzzy fallback), baru fuzzy-match Nimegami dicoba PALING TERAKHIR.
-    // Ini mencegah fuzzy fallback Nimegami "membajak" slug yang sebenarnya
-    // exact-match milik Otakudesu/Samehadaku (lihat komentar di
-    // scrapers/nimegami/detail.ts) -- akar penyebab anime yang tampil
-    // salah/tertukar setelah search atau filter genre.
     return cacheManager.wrap(`detail:${slug}`, CACHE_TTL.DETAIL, () =>
       withFallbackChain([
-        { source: 'Nimegami', fetcher: () => NimegamiDetail.getAnimeDetail(slug, false) },
+        { source: 'Nimegami', fetcher: () => NimegamiDetail.getAnimeDetail(slug) },
         { source: 'Otakudesu', fetcher: () => OtakudesuDetail.getAnimeDetail(slug) },
         { source: 'Samehadaku', fetcher: () => SamehadakuDetail.getAnimeDetail(slug) },
-        { source: 'Nimegami', fetcher: () => NimegamiDetail.getAnimeDetail(slug, true) },
       ]),
     );
   },

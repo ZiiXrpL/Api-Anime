@@ -1,38 +1,17 @@
-import { MovieListFilters } from '../interfaces/movie.interface';
-
 /**
  * ============================================================================
  * MOVIE SOURCE CONFIG
  * ============================================================================
- * File inilah SATU-SATUNYA tempat yang perlu diubah kalau mau:
- *  - Mengganti website sumber scraping (baseURL, path, atau selector CSS)
- *  - Menambah source kedua/ketiga (tinggal tambah 1 object baru di MOVIE_SOURCES)
+ * Source: nationalgeoraphic.com (tema WordPress MUVIPRO — dikonfirmasi dari
+ * HTML mentah: list.html, list-page2.html, detail.html, genre-detail.html,
+ * search.html, ajax-player.js, dan response asli player-p1/p2/p3.html).
+ * Semua selector & path di bawah diambil LANGSUNG dari HTML tersebut, bukan
+ * tebakan dari tema lain.
  *
- * ----------------------------------------------------------------------------
- * UPDATE — source diganti dari lk21-style (streaming film) ke
- * nationalgeographic.com (artikel/majalah).
- * ----------------------------------------------------------------------------
- * PENTING: NationalGeographic.com bukan situs streaming film — jadi field
- * bawaan modul ini yang aslinya didesain untuk film (streamServers,
- * downloadList, quality, duration) akan SELALU KOSONG untuk source ini.
- * Yang terisi cuma: title, poster, url, genre (dipetakan dari section/topic
- * NatGeo seperti "Animals"/"Science"), dan synopsis (dari field `abstract`).
- *
- * NationalGeographic.com juga TIDAK bisa di-scrape pakai CSS selector biasa
- * (cheerio) seperti situs lk21 — kontennya React/Next.js dan gambar asli
- * cuma ada di lazy-load JS, BUKAN di HTML awal. Untungnya situs ini
- * menyuntik seluruh data halaman (termasuk url gambar asli) sebagai satu
- * blok JSON di `<script>window['__CONFIG__']={...}</script>`. Karena itu
- * source ini pakai `parserType: 'natgeo-json'` — parsernya (lihat
- * `parseNatGeoList`/`parseNatGeoDetail` di parsers/movie.parser.ts) TIDAK
- * memakai `selectors` sama sekali, cukup ekstrak & jalan-jalani JSON itu.
- *
- * Untuk menambah source baru:
- *   1. Kalau source baru berbasis CSS (HTML statis biasa): duplikat pola
- *      `sourceA` versi lama (cheerio + selectors), set parserType: 'css'.
- *   2. Kalau source baru juga berbasis JSON tersuntik seperti ini: duplikat
- *      pola `sourceNatGeo`, sesuaikan `configVarMarker` & parser JSON-nya.
- *   3. Push object tersebut ke array MOVIE_SOURCES.
+ * File inilah SATU-SATUNYA tempat yang perlu diubah kalau situs sumber
+ * berubah struktur HTML-nya. Parser (parsers/movie.parser.ts), scraper
+ * (scrapers/movie/movieScraper.ts), service, controller, dan route TIDAK
+ * PERNAH menyebut nama/struktur website secara hardcode.
  * ============================================================================
  */
 
@@ -49,142 +28,127 @@ function getEnvNumber(key: string, fallback: number): number {
 }
 
 export interface MovieListSelectors {
+  /** Selector container per-item kartu film (dipakai bareng di list/genre/search) */
   item: string;
-  title: string;
-  link: string;
+  /** Selector <a> judul, relatif terhadap `item` (href = URL detail, text = judul) */
+  titleLink: string;
+  /** Selector <img> poster, relatif terhadap `item` */
   poster: string;
   posterAttr?: string;
   quality?: string;
   rating?: string;
-  year?: string;
+  duration?: string;
+  /** Selector <time itemprop="dateCreated"> (screen-reader-text) buat ambil tahun dari attr `datetime` */
+  date?: string;
 }
 
 export interface MovieDetailSelectors {
   title: string;
   poster: string;
   posterAttr?: string;
+  /** Paragraf sinopsis pertama di dalam .entry-content */
   synopsis: string;
-  rating?: string;
-  quality?: string;
-  duration?: string;
-  releaseYear?: string;
-  country?: string;
-  director?: string;
-  castItem?: string;
+  ratingValue?: string;
+  /**
+   * Baris metadata (Genre/Quality/Year/Country/Release/Language/Director/Cast)
+   * ada di dalam <div class="gmr-moviedata"><strong>Label:</strong>...</div>
+   * yang cuma dibedakan lewat teks label-nya, jadi diparse manual di
+   * movie.parser.ts (bukan selector CSS per-field) — field di bawah cuma
+   * container umumnya.
+   */
+  moviedataItem: string;
   genreItem: string;
-  streamServerItem?: string;
-  streamServerUrlAttr?: string;
-  downloadGroupItem?: string;
-  downloadGroupQualityLabel?: string;
-  downloadLinkItem?: string;
-}
-
-export interface MovieSourceSelectors {
-  home: {
-    latestContainer: string;
-    popularContainer: string;
-  };
-  list: MovieListSelectors;
-  detail: MovieDetailSelectors;
-  genreListItem: string;
-  countryListItem: string;
-  yearListItem: string;
+  countryItem: string;
+  directorItem: string;
+  castItem: string;
+  /** Container player: <div id="..." data-id="{post_id}"> */
+  playerContainer: string;
+  playerContainerIdAttr: string;
+  /** Tab server: <li><a href="#p1">Server 1</a></li> */
+  serverTabItem: string;
+  downloadItem: string;
 }
 
 export interface MovieSourcePaths {
-  home: string;
-  list: (page: number, filters?: MovieListFilters) => string;
+  /** Halaman list utama (dipetakan ke GET /movie, /movie/home, /movie/latest, /movie/popular) */
+  list: (page: number) => string;
   search: (query: string) => string;
-  detail: (id: string) => string;
-  genreList: string;
+  detail: (slug: string) => string;
   genreDetail: (slug: string, page: number) => string;
-  countryList: string;
-  countryDetail: (slug: string, page: number) => string;
-  yearList: string;
-  yearDetail: (year: string, page: number) => string;
-  latest: (page: number) => string;
-  popular: (page: number) => string;
+  /** admin-ajax.php dipakai untuk resolve embed player (POST) */
+  ajax: string;
 }
 
 export interface MovieSourceConfig {
-  /** Nama unik source, dipakai sebagai identitas di field `source` pada response */
   name: string;
   baseURL: string;
+  /** Selector <li> menu "Genre" yang membungkus sub-menu genre (nav header) */
+  genreMenuItem: string;
   paths: MovieSourcePaths;
-  /**
-   * 'css'         -> scraping HTML statis pakai cheerio + `selectors` (mis. lk21).
-   * 'natgeo-json' -> ekstrak blok JSON `window['__CONFIG__']` dari HTML, tidak
-   *                  pakai `selectors` sama sekali (lihat parseNatGeoList/Detail).
-   * Default (kalau tidak diisi): 'css'.
-   */
-  parserType?: 'css' | 'natgeo-json';
-  /** Dipakai hanya kalau parserType === 'css'. */
-  selectors?: MovieSourceSelectors;
-  /**
-   * Daftar section NatGeo yang dianggap sebagai "genre" (dipakai oleh
-   * fetchGenreList & saat mencari section yang benar buat halaman detail).
-   * Dipakai hanya kalau parserType === 'natgeo-json'.
-   */
-  natgeoSections?: { name: string; slug: string; path: string }[];
+  selectors: {
+    list: MovieListSelectors;
+    detail: MovieDetailSelectors;
+  };
+  /** Nilai `action` yang dikirim ke admin-ajax.php buat resolve embed player (dari ajax-player.js) */
+  ajaxPlayerAction: string;
 }
 
-const NATGEO_SECTIONS: { name: string; slug: string; path: string }[] = [
-  { name: 'Animals', slug: 'animals', path: '/animals' },
-  { name: 'Science & Nature', slug: 'science', path: '/science' },
-  { name: 'History & Culture', slug: 'history', path: '/history' },
-  { name: 'Travel', slug: 'travel', path: '/travel' },
-  { name: 'Health', slug: 'health', path: '/health' },
-  { name: 'Environment', slug: 'environment', path: '/environment' },
-];
-
-/**
- * Source: National Geographic (nationalgeographic.com).
- * Ganti MOVIE_SOURCE_A_URL di .env kalau perlu (mis. buat regional domain).
- */
-const sourceNatGeo: MovieSourceConfig = {
-  name: getEnv('MOVIE_SOURCE_A_NAME', 'NatGeo'),
-  baseURL: getEnv('MOVIE_SOURCE_A_URL', 'https://www.nationalgeographic.com'),
-  parserType: 'natgeo-json',
-  natgeoSections: NATGEO_SECTIONS,
+const nationalGeoraphic: MovieSourceConfig = {
+  name: getEnv('MOVIE_SOURCE_A_NAME', 'NationalGeoraphic'),
+  baseURL: getEnv('MOVIE_SOURCE_A_URL', 'https://nationalgeoraphic.com'),
+  // Dropdown "Genre" di nav (<li id="menu-item-66">...<span>Genre</span>...)
+  // adalah satu-satunya <li> menu top-level yang isi teksnya persis "Genre",
+  // jadi diseleksi lewat XPath-like text match di parser (cheerio: iterasi
+  // li.menu-item-has-children lalu cek teks anak <span> pertamanya).
+  genreMenuItem: 'li.menu-item-has-children',
   paths: {
-    home: '/animals',
-    // CATATAN: NatGeo pakai infinite-scroll berbasis token "context" (base64)
-    // buat halaman ke-2 dst — bukan query string sederhana seperti
-    // ?page=N. Mereplikasi token itu butuh reverse-engineering lebih jauh,
-    // jadi UNTUK SEKARANG list() selalu mengembalikan halaman pertama
-    // section utama berapapun `page` yang diminta (best-effort, bukan bug).
-    list: () => '/animals',
-    // Belum diverifikasi — NatGeo mungkin tidak expose pencarian lewat query
-    // string biasa (perlu curl manual ke /search?q=... buat konfirmasi).
-    search: (query) => `/search?q=${encodeURIComponent(query)}`,
-    // `id` di sini adalah slug SATU segmen (mis. "french-wildfires-animals"),
-    // bukan path lengkap — karena route Express /movies/:id cuma terima 1
-    // segmen. Path ini sengaja tidak dipakai; fetchDetail (movieScraper.ts)
-    // mencoba tiap section di natgeoSections sampai ketemu yang match,
-    // karena artikel NatGeo tersebar di banyak section (/animals/article/x,
-    // /science/article/y, dst) dan slug-nya saja tidak menunjukkan section.
-    detail: (id) => `/animals/article/${id}`,
-    genreList: '/animals',
-    genreDetail: (slug) => NATGEO_SECTIONS.find((s) => s.slug === slug)?.path || `/${slug}`,
-    // NatGeo tidak punya konsep "negara" untuk artikel -> tidak didukung,
-    // fallback ke section utama supaya tidak crash.
-    countryList: '/animals',
-    countryDetail: () => '/animals',
-    // NatGeo tidak punya listing per-tahun untuk artikel -> tidak didukung.
-    yearList: '/animals',
-    yearDetail: () => '/animals',
-    latest: () => '/animals',
-    popular: () => '/animals',
+    list: (page) => (page > 1 ? `/category/movies/page/${page}/` : '/category/movies/'),
+    // Dikonfirmasi dari search.html: /?s={query}&post_type[]=post&post_type[]=tv
+    search: (query) => `/?s=${encodeURIComponent(query)}&post_type%5B%5D=post&post_type%5B%5D=tv`,
+    // Detail film ada di root domain, bukan di bawah /movie/ atau /detail/
+    // (contoh: https://nationalgeoraphic.com/all-that-we-never-were-2026/)
+    detail: (slug) => `/${slug}/`,
+    genreDetail: (slug, page) => (page > 1 ? `/category/${slug}/page/${page}/` : `/category/${slug}/`),
+    ajax: '/wp-admin/admin-ajax.php',
   },
+  selectors: {
+    list: {
+      item: 'article[id^="post-"]',
+      titleLink: 'h2.entry-title a',
+      poster: '.content-thumbnail img',
+      posterAttr: 'src',
+      quality: '.gmr-quality-item a',
+      rating: '.gmr-rating-item',
+      duration: '.gmr-duration-item',
+      date: 'time[itemprop="dateCreated"]',
+    },
+    detail: {
+      title: 'h1.entry-title',
+      poster: '.gmr-movie-data figure img',
+      posterAttr: 'src',
+      synopsis: '.entry-content-single > p',
+      ratingValue: '.gmr-meta-rating [itemprop="ratingValue"]',
+      moviedataItem: '.content-moviedata .gmr-moviedata',
+      genreItem: 'a[href*="/category/"]',
+      countryItem: 'a[href*="/country/"]',
+      directorItem: 'a[href*="/director/"]',
+      castItem: 'a[href*="/cast/"]',
+      playerContainer: '.muvipro_player_content',
+      playerContainerIdAttr: 'data-id',
+      serverTabItem: 'ul.muvipro-player-tabs > li > a',
+      downloadItem: '#download .gmr-download-list a',
+    },
+  },
+  // Dikonfirmasi dari ajax-player.js:
+  // xhttp.send('action=muvipro_player_content&tab='+tab_name+'&post_id='+post_id)
+  ajaxPlayerAction: 'muvipro_player_content',
 };
 
-export const MOVIE_SOURCES: MovieSourceConfig[] = [sourceNatGeo];
+export const MOVIE_SOURCES: MovieSourceConfig[] = [nationalGeoraphic];
 
 /**
  * Ambil daftar source yang aktif. Bisa dibatasi lewat env MOVIE_ACTIVE_SOURCES
- * (comma-separated nama source), misal: "NatGeo,SourceLainnya".
- * Kalau tidak diset, semua source di MOVIE_SOURCES dipakai (urut sesuai array
- * = urutan prioritas fallback).
+ * (comma-separated nama source). Kalau tidak diset, semua source dipakai.
  */
 export function getActiveMovieSources(): MovieSourceConfig[] {
   const raw = getEnv('MOVIE_ACTIVE_SOURCES', '');
@@ -201,5 +165,6 @@ export const MOVIE_CACHE_TTL = {
   HOME: getEnvNumber('MOVIE_CACHE_TTL_HOME', 600),
   LIST: getEnvNumber('MOVIE_CACHE_TTL_LIST', 1800),
   DETAIL: getEnvNumber('MOVIE_CACHE_TTL_DETAIL', 3600),
+  WATCH: getEnvNumber('MOVIE_CACHE_TTL_WATCH', 1800),
   TAXONOMY: getEnvNumber('MOVIE_CACHE_TTL_TAXONOMY', 21600),
 };

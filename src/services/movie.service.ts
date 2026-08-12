@@ -2,27 +2,18 @@ import { cacheManager } from '../helpers/cacheManager';
 import { MOVIE_CACHE_TTL } from '../configs/movieSources.config';
 import { withMovieFallback, MovieSourceResult } from './movieSourceManager.service';
 import * as MovieScraper from '../scrapers/movie/movieScraper';
-import {
-  MovieCard,
-  MovieCountryItem,
-  MovieDetail,
-  MovieGenreItem,
-  MovieHomeData,
-  MovieListFilters,
-  MovieYearItem,
-} from '../interfaces/movie.interface';
+import { MovieCard, MovieDetail, MovieDownloadLink, MovieGenreItem, MovieHomeData, MovieWatchData } from '../interfaces/movie.interface';
 
 export const movieService = {
-  getHome(): Promise<MovieSourceResult<MovieHomeData>> {
-    return cacheManager.wrap('movie:home', MOVIE_CACHE_TTL.HOME, () =>
-      withMovieFallback((source) => MovieScraper.fetchHome(source)),
+  getList(page: number): Promise<MovieSourceResult<MovieCard[]>> {
+    return cacheManager.wrap(`movie:list:${page}`, MOVIE_CACHE_TTL.LIST, () =>
+      withMovieFallback((source) => MovieScraper.fetchList(source, page)),
     );
   },
 
-  getAllMovies(page: number, filters?: MovieListFilters): Promise<MovieSourceResult<MovieCard[]>> {
-    const filterKey = filters ? JSON.stringify(filters) : 'none';
-    return cacheManager.wrap(`movie:list:${page}:${filterKey}`, MOVIE_CACHE_TTL.LIST, () =>
-      withMovieFallback((source) => MovieScraper.fetchList(source, page, filters)),
+  getHome(): Promise<MovieSourceResult<MovieHomeData>> {
+    return cacheManager.wrap('movie:home', MOVIE_CACHE_TTL.HOME, () =>
+      withMovieFallback((source) => MovieScraper.fetchHome(source)),
     );
   },
 
@@ -32,9 +23,21 @@ export const movieService = {
     );
   },
 
-  getDetail(id: string): Promise<MovieSourceResult<MovieDetail>> {
-    return cacheManager.wrap(`movie:detail:${id}`, MOVIE_CACHE_TTL.DETAIL, () =>
-      withMovieFallback((source) => MovieScraper.fetchDetail(source, id)),
+  getDetail(slug: string): Promise<MovieSourceResult<MovieDetail>> {
+    return cacheManager.wrap(`movie:detail:${slug}`, MOVIE_CACHE_TTL.DETAIL, () =>
+      withMovieFallback((source) => MovieScraper.fetchDetail(source, slug)),
+    );
+  },
+
+  getWatch(slug: string): Promise<MovieSourceResult<MovieWatchData>> {
+    return cacheManager.wrap(`movie:watch:${slug}`, MOVIE_CACHE_TTL.WATCH, () =>
+      withMovieFallback((source) => MovieScraper.fetchWatch(source, slug)),
+    );
+  },
+
+  getDownload(slug: string): Promise<MovieSourceResult<MovieDownloadLink[]>> {
+    return cacheManager.wrap(`movie:download:${slug}`, MOVIE_CACHE_TTL.DETAIL, () =>
+      withMovieFallback((source) => MovieScraper.fetchDownload(source, slug)),
     );
   },
 
@@ -48,50 +51,5 @@ export const movieService = {
     return cacheManager.wrap(`movie:genre:${slug}:${page}`, MOVIE_CACHE_TTL.LIST, () =>
       withMovieFallback((source) => MovieScraper.fetchByGenre(source, slug, page)),
     );
-  },
-
-  getByCountry(slug: string, page: number): Promise<MovieSourceResult<MovieCard[]>> {
-    return cacheManager.wrap(`movie:country:${slug}:${page}`, MOVIE_CACHE_TTL.LIST, () =>
-      withMovieFallback((source) => MovieScraper.fetchByCountry(source, slug, page)),
-    );
-  },
-
-  getByYear(year: string, page: number): Promise<MovieSourceResult<MovieCard[]>> {
-    return cacheManager.wrap(`movie:year:${year}:${page}`, MOVIE_CACHE_TTL.LIST, () =>
-      withMovieFallback((source) => MovieScraper.fetchByYear(source, year, page)),
-    );
-  },
-
-  getCountryList(): Promise<MovieSourceResult<MovieCountryItem[]>> {
-    return cacheManager.wrap('movie:countries', MOVIE_CACHE_TTL.TAXONOMY, () =>
-      withMovieFallback((source) => MovieScraper.fetchCountryList(source)),
-    );
-  },
-
-  getYearList(): Promise<MovieSourceResult<MovieYearItem[]>> {
-    return cacheManager.wrap('movie:years', MOVIE_CACHE_TTL.TAXONOMY, () =>
-      withMovieFallback((source) => MovieScraper.fetchYearList(source)),
-    );
-  },
-
-  getLatest(page: number): Promise<MovieSourceResult<MovieCard[]>> {
-    return cacheManager.wrap(`movie:latest:${page}`, MOVIE_CACHE_TTL.LIST, () =>
-      withMovieFallback((source) => MovieScraper.fetchLatest(source, page)),
-    );
-  },
-
-  getPopular(page: number): Promise<MovieSourceResult<MovieCard[]>> {
-    return cacheManager.wrap(`movie:popular:${page}`, MOVIE_CACHE_TTL.LIST, () =>
-      withMovieFallback((source) => MovieScraper.fetchPopular(source, page)),
-    );
-  },
-
-  async getRecommendation(): Promise<MovieSourceResult<MovieCard[]>> {
-    return cacheManager.wrap('movie:recommendation', MOVIE_CACHE_TTL.HOME, async () => {
-      const result = await withMovieFallback((source) => MovieScraper.fetchHome(source));
-      const pool = [...result.data.latest, ...result.data.popular];
-      const shuffled = pool.sort(() => Math.random() - 0.5).slice(0, 10);
-      return { source: result.source, data: shuffled };
-    });
   },
 };

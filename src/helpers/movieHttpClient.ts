@@ -31,26 +31,3 @@ export function getMovieHttpClient(baseURL: string): AxiosInstance {
   clientCache.set(baseURL, client);
   return client;
 }
-
-/**
- * FIX (masalah "search film selalu kosong"): endpoint pencarian situs film
- * ternyata ada di domain TERPISAH dari domain utama (dibaca dinamis dari
- * atribut data-search_url di halaman utama, lihat MovieParser.parseSearchConfig
- * & MovieScraper.fetchSearch) dan balasannya JSON langsung — bukan HTML biasa
- * yang bisa dipakai lewat getMovieHttpClient(baseURL) yang di-cache per
- * baseURL utama. Helper ini untuk panggilan sekali pakai ke url absolut
- * apapun (dengan header yang sama), tanpa perlu baseURL tetap.
- */
-export async function getJson<T = unknown>(url: string, params?: Record<string, string | number>): Promise<T> {
-  const res = await axios.get<T>(url, {
-    params,
-    timeout: env.REQUEST_TIMEOUT_MS,
-    headers: {
-      'User-Agent': USER_AGENT,
-      Accept: 'application/json, text/plain, */*',
-      'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
-    },
-    validateStatus: (status) => status >= 200 && status < 400,
-  });
-  return res.data;
-}
