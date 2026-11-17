@@ -21,7 +21,7 @@ export const env = {
   PORT: getEnvNumber('PORT', 3000),
   NODE_ENV: getEnv('NODE_ENV', 'development'),
 
-  OTAKUDESU_URL: getEnv('OTAKUDESU_URL', 'https://otakudesu.cloud'),
+  OTAKUDESU_URL: getEnv('OTAKUDESU_URL', 'https://otakudesu.blog'),
   SAMEHADAKU_URL: getEnv('SAMEHADAKU_URL', 'https://v2.samehadaku.how'),
   NIMEGAMI_URL: getEnv('NIMEGAMI_URL', 'https://nimegami.id'),
 
