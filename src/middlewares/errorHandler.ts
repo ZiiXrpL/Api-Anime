@@ -3,16 +3,20 @@ import { AllSourcesFailedError, SourceError } from '../interfaces/errors.interfa
 import { SourceName } from '../interfaces/response.interface';
 import { sendError } from '../utils/responseBuilder';
 import { logger } from '../utils/logger';
+import { normalizeSourceName } from '../adapters/types';
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function globalErrorHandler(err: Error, req: Request, res: Response, _next: NextFunction): void {
   logger.error(`Unhandled error on ${req.method} ${req.originalUrl}`, { message: err.message });
 
+  if (res.headersSent) return;
+
   if (err instanceof SourceError) {
     sendError(res, {
       message: err.message,
-      source: err.source,
+      source: normalizeSourceName(err.source),
       statusCode: 502,
+      code: 'SOURCE_UNAVAILABLE',
     });
     return;
   }
@@ -21,15 +25,17 @@ export function globalErrorHandler(err: Error, req: Request, res: Response, _nex
     const lastSource = (err as unknown as { lastSource?: SourceName }).lastSource;
     sendError(res, {
       message: err.message,
-      source: lastSource ?? 'None',
+      source: lastSource ? normalizeSourceName(lastSource) : 'none',
       statusCode: 503,
+      code: 'ALL_SOURCES_FAILED',
     });
     return;
   }
 
   sendError(res, {
     message: 'Terjadi kesalahan internal pada server',
-    source: 'None',
+    source: 'none',
     statusCode: 500,
+    code: 'INTERNAL_ERROR',
   });
 }

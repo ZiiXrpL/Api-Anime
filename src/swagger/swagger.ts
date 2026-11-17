@@ -1,16 +1,97 @@
 import { moviePaths, movieSwaggerTag } from './movie.swagger';
 
+const sourceParam = {
+  name: 'source',
+  in: 'query',
+  required: false,
+  description: 'Sumber anime: otakudesu | nimegami | kuramanime | samehadaku. Kosong = fallback otomatis.',
+  schema: { type: 'string', enum: ['otakudesu', 'nimegami', 'kuramanime', 'samehadaku'] },
+};
+
+const pageParam = { name: 'page', in: 'query', required: false, schema: { type: 'integer', minimum: 1 } };
+const jsonOk = {
+  description: 'Respons JSON valid',
+  content: {
+    'application/json': {
+      example: { status: true, message: 'Success', source: 'otakudesu', total: 1, data: [] },
+    },
+  },
+};
+const jsonError = {
+  description: 'Gagal mengambil data',
+  content: {
+    'application/json': {
+      example: { status: false, message: 'Semua sumber gagal', source: 'otakudesu', error: { code: 'ALL_SOURCES_FAILED' } },
+    },
+  },
+};
+const responses = { '200': jsonOk, '400': jsonError, '502': jsonError, '503': jsonError };
+
+const apiPaths = {
+  '/api/sources': {
+    get: {
+      summary: 'Monitoring actual availability ketiga sumber (+ samehadaku)',
+      description: 'Mengirim HEAD/GET nyata ke tiap source, mengembalikan responseTime dan lastChecked.',
+      tags: ['Sources'],
+      parameters: [{ name: 'refresh', in: 'query', required: false, schema: { type: 'boolean' } }],
+      responses,
+    },
+  },
+  '/api/anime/home': { get: { summary: 'Home (ongoing + completed)', tags: ['Anime Multi-Source'], parameters: [sourceParam], responses } },
+  '/api/anime/ongoing': { get: { summary: 'Daftar ongoing', tags: ['Anime Multi-Source'], parameters: [sourceParam, pageParam], responses } },
+  '/api/anime/completed': { get: { summary: 'Daftar completed', tags: ['Anime Multi-Source'], parameters: [sourceParam, pageParam], responses } },
+  '/api/anime/list': { get: { summary: 'Daftar seluruh anime', tags: ['Anime Multi-Source'], parameters: [sourceParam, pageParam], responses } },
+  '/api/anime/search': {
+    get: {
+      summary: 'Cari anime',
+      tags: ['Anime Multi-Source'],
+      parameters: [sourceParam, { name: 'q', in: 'query', required: true, schema: { type: 'string' } }],
+      responses,
+    },
+  },
+  '/api/anime/genres': { get: { summary: 'Daftar genre', tags: ['Anime Multi-Source'], parameters: [sourceParam], responses } },
+  '/api/anime/schedule': { get: { summary: 'Jadwal rilis', tags: ['Anime Multi-Source'], parameters: [sourceParam], responses } },
+  '/api/anime/detail/{slug}': {
+    get: {
+      summary: 'Detail anime',
+      tags: ['Anime Multi-Source'],
+      parameters: [sourceParam, { name: 'slug', in: 'path', required: true, schema: { type: 'string' } }],
+      responses,
+    },
+  },
+  '/api/anime/episodes/{slug}': {
+    get: {
+      summary: 'Daftar episode anime',
+      tags: ['Anime Multi-Source'],
+      parameters: [sourceParam, { name: 'slug', in: 'path', required: true, schema: { type: 'string' } }],
+      responses,
+    },
+  },
+  '/api/anime/episode/{slug}': {
+    get: {
+      summary: 'Detail satu episode',
+      tags: ['Anime Multi-Source'],
+      parameters: [sourceParam, { name: 'slug', in: 'path', required: true, schema: { type: 'string' } }],
+      responses,
+    },
+  },
+};
+
 export const swaggerDocument = {
   openapi: '3.0.0',
   info: {
     title: 'Anime API Indonesia',
-    version: '1.0.0',
+    version: '1.1.0',
     description:
-      'REST API Anime (Otakudesu -> Samehadaku -> Error) + Movie (multi-source, modular via config) hasil scraping langsung, tanpa API pihak ketiga.',
+      'REST API multi-source (Otakudesu, Nimegami, Kuramanime, Samehadaku) hasil scraping metadata publik. Pilih sumber via ?source=, fallback otomatis bila gagal.',
   },
-  servers: [{ url: '/' }],
-  tags: [{ name: 'Anime API' }, movieSwaggerTag],
+  servers: [
+    { url: 'https://api-anime-brown.vercel.app', description: 'Production' },
+    { url: '/', description: 'Local' },
+  ],
+  tags: [{ name: 'Anime API' }, { name: 'Anime Multi-Source' }, { name: 'Sources' }, movieSwaggerTag],
   paths: {
+    ...apiPaths,
     ...moviePaths,
     '/health': {
       get: { summary: 'Cek status kesehatan server', responses: { '200': { description: 'OK' } } },

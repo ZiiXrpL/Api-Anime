@@ -19,6 +19,7 @@ export interface ApiSuccessResponse<T> {
   message: string;
   source: SourceName;
   data: T;
+  total?: number;
   pagination?: Pagination;
 }
 
@@ -26,6 +27,7 @@ export interface ApiErrorResponse {
   status: false;
   message: string;
   source?: SourceName | 'None';
+  error?: { code: string };
 }
 
 export type ApiResponse<T> = ApiSuccessResponse<T> | ApiErrorResponse;

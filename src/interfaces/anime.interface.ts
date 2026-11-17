@@ -85,4 +85,4 @@ export interface ScheduleItem {
   animeList: AnimeCard[];
 }
 
-export interface SearchResultItem extends AnimeCard {}
+export type SearchResultItem = AnimeCard;

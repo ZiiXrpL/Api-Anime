@@ -24,6 +24,10 @@ export const env = {
   OTAKUDESU_URL: getEnv('OTAKUDESU_URL', 'https://otakudesu.blog'),
   SAMEHADAKU_URL: getEnv('SAMEHADAKU_URL', 'https://v2.samehadaku.how'),
   NIMEGAMI_URL: getEnv('NIMEGAMI_URL', 'https://nimegami.id'),
+  // Kuramanime memutar domain (kuramanime.com/.net/.care/.my.id) yang
+  // semuanya redirect ke v20.kuramanime.ing. Pakai tujuan akhir supaya
+  // tidak bergantung pada rantai redirect yang bisa berubah.
+  KURAMANIME_URL: getEnv('KURAMANIME_URL', 'https://v20.kuramanime.ing'),
 
   CACHE_TTL_HOME: getEnvNumber('CACHE_TTL_HOME', 600),
   CACHE_TTL_LIST: getEnvNumber('CACHE_TTL_LIST', 1800),

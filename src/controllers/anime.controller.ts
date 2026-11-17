@@ -1,10 +1,11 @@
 import { Request, Response } from 'express';
-import { animeService } from '../services/anime.service';
+import { animeV2Service } from '../services/animeV2.service';
+import { parseSourceKey } from '../adapters/types';
 import { sendSuccess } from '../utils/responseBuilder';
 
 export async function getAllAnimeController(req: Request, res: Response): Promise<void> {
   const page = Number(req.query.page) > 0 ? Number(req.query.page) : 1;
-  const result = await animeService.getAllAnime(page);
+  const result = await animeV2Service.getAnimeList(page, parseSourceKey(req.query.source));
   sendSuccess(res, {
     source: result.source,
     data: result.data,
@@ -13,7 +14,6 @@ export async function getAllAnimeController(req: Request, res: Response): Promis
 }
 
 export async function getAnimeDetailController(req: Request, res: Response): Promise<void> {
-  const { id } = req.params;
-  const result = await animeService.getAnimeDetail(id as string);
+  const result = await animeV2Service.getAnimeDetail(String(req.params.id), parseSourceKey(req.query.source));
   sendSuccess(res, { source: result.source, data: result.data });
 }

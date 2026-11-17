@@ -1,15 +1,16 @@
 import { Request, Response } from 'express';
-import { animeService } from '../services/anime.service';
+import { animeV2Service } from '../services/animeV2.service';
+import { parseSourceKey } from '../adapters/types';
 import { sendSuccess } from '../utils/responseBuilder';
 
 function getPage(req: Request): number {
   const page = Number(req.query.page);
-  return Number.isFinite(page) && page > 0 ? page : 1;
+  return Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
 }
 
 export async function getOngoingController(req: Request, res: Response): Promise<void> {
   const page = getPage(req);
-  const result = await animeService.getOngoing(page);
+  const result = await animeV2Service.getOngoing(page, parseSourceKey(req.query.source));
   sendSuccess(res, {
     source: result.source,
     data: result.data,
@@ -19,7 +20,7 @@ export async function getOngoingController(req: Request, res: Response): Promise
 
 export async function getCompletedController(req: Request, res: Response): Promise<void> {
   const page = getPage(req);
-  const result = await animeService.getCompleted(page);
+  const result = await animeV2Service.getCompleted(page, parseSourceKey(req.query.source));
   sendSuccess(res, {
     source: result.source,
     data: result.data,
@@ -27,12 +28,5 @@ export async function getCompletedController(req: Request, res: Response): Promi
   });
 }
 
-export async function getMoviesController(req: Request, res: Response): Promise<void> {
-  const page = getPage(req);
-  const result = await animeService.getMovies(page);
-  sendSuccess(res, {
-    source: result.source,
-    data: result.data,
-    pagination: { currentPage: page, hasNextPage: result.data.length > 0, hasPrevPage: page > 1 },
-  });
-}
+// Endpoint anime movie lama: tetap memakai layanan lama untuk kompatibilitas.
+export { getMoviesController } from './legacyMovies.controller';

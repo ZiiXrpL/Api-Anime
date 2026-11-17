@@ -7,6 +7,7 @@ export function sendSuccess<T>(
     message?: string;
     source: SourceName;
     data: T;
+    total?: number;
     pagination?: Pagination;
     statusCode?: number;
   },
@@ -17,6 +18,9 @@ export function sendSuccess<T>(
     source: params.source,
     data: params.data,
   };
+  if (params.total !== undefined) {
+    body.total = params.total;
+  }
   if (params.pagination) {
     body.pagination = params.pagination;
   }
@@ -29,6 +33,7 @@ export function sendError(
     message: string;
     source?: SourceName | 'None';
     statusCode?: number;
+    code?: string;
   },
 ): Response {
   const body: ApiErrorResponse = {
@@ -36,5 +41,8 @@ export function sendError(
     message: params.message,
     source: params.source ?? 'None',
   };
+  if (params.code) {
+    body.error = { code: params.code };
+  }
   return res.status(params.statusCode ?? 502).json(body);
 }
