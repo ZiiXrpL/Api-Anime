@@ -17,7 +17,11 @@ export async function getHome(): Promise<HomeData> {
 }
 
 export async function getAnimeDetail(slug: string): Promise<AnimeDetail> {
-  return parseDetail(await get(`/${encodeURIComponent(slug)}/`, `detail "${slug}"`), slug);
+  const detail = parseDetail(await get(`/${encodeURIComponent(slug)}/`, `detail "${slug}"`), slug);
+  if (!detail.title) {
+    throw new SourceError('Nimegami', `Anime "${slug}" tidak ditemukan di Nimegami`);
+  }
+  return detail;
 }
 
 export async function getGenres(): Promise<GenreItem[]> {

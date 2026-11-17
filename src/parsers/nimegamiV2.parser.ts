@@ -56,6 +56,18 @@ export function parseDetail(html: string, slug: string): AnimeDetail {
   const $ = cheerio.load(html);
   const title = clean($('h1').first().text() || $('title').first().text().replace(/\s*Sub Indo\s*\|.*$/i, ''));
 
+  // Nimegami mengembalikan halaman 200 dengan judul "Anime tidak ditemukan"
+  // untuk slug invalid. Jangan menjadikannya data anime palsu.
+  if (/tidak ditemukan|not found|404/i.test(title)) {
+    return {
+      title: '',
+      slug,
+      poster: '',
+      genres: [],
+      episodeList: [],
+    };
+  }
+
   const info: Record<string, string> = {};
   $('.anime-info-summary > div').each((_, el) => {
     const key = clean($(el).find('dt').text()).toLowerCase();
