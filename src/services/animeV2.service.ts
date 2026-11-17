@@ -163,10 +163,24 @@ export const animeV2Service = {
     });
   },
 
-  getEpisodeDetail(slug: string, source?: SourceKey): Promise<SourceResultV2<EpisodeDetail>> {
-    return cacheManager.wrap(`v2:episode:${source ?? 'auto'}:${slug}`, CACHE_TTL.EPISODE, () =>
-      run<EpisodeDetail>('episodeDetail', (a) => a.getEpisodeDetail(slug), source),
-    );
+  async getEpisodeDetail(slug: string, source?: SourceKey): Promise<SourceResultV2<EpisodeDetail>> {
+    const key = `v2:episode:${source ?? 'auto'}:${slug}`;
+    const cached = cacheManager.get<SourceResultV2<EpisodeDetail>>(key);
+    if (cached) return cached;
+
+    const result = await run<EpisodeDetail>('episodeDetail', (a) => a.getEpisodeDetail(slug), source);
+    // Beberapa sumber (AnimeMu) memberi URL bertanda tangan yang hanya
+    // berlaku beberapa menit. Jangan simpan 24 jam sampai URL-nya kedaluwarsa.
+    let ttl = CACHE_TTL.EPISODE;
+    const now = Math.floor(Date.now() / 1000);
+    const expirations = (result.data?.streamServers ?? [])
+      .map((server) => Number(server.url.match(/[?&]exp=(\d+)/)?.[1] ?? 0))
+      .filter((exp) => exp > now);
+    if (expirations.length > 0) {
+      ttl = Math.max(30, Math.min(Math.min(...expirations) - now - 60, CACHE_TTL.EPISODE));
+    }
+    cacheManager.set(key, result, ttl);
+    return result;
   },
 
   getGenres(source?: SourceKey): Promise<SourceResultV2<GenreItem[]>> {
