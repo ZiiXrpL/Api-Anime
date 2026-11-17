@@ -14,7 +14,12 @@ import { env } from './configs/env';
 
 const app: Application = express();
 
-app.use(helmet());
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+  })
+);
+
 app.use(cors());
 app.use(compression());
 app.use(morgan(env.isProduction() ? 'combined' : 'dev'));
