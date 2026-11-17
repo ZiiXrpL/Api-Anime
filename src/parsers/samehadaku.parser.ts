@@ -279,10 +279,16 @@ export function parseEpisode(html: string, slug: string): EpisodeDetail {
     }
   });
 
+  const animeHref = $('.nvs a, .lokasieps a').first().attr('href') || '';
+  // Tema baru memakai anchor "#" untuk dropdown; itu BUKAN slug anime.
+  // Terima hanya href /anime/...; selain itu turunkan dari slug episode.
+  const animeSlugFromLink = animeHref.includes('/anime/') ? slugFromUrl(animeHref) : '';
+  const animeSlug = animeSlugFromLink || slug.replace(/-episode-\d+.*$/i, '');
+
   return {
     title: $('.entry-title, h1.entry-title').first().text().trim(),
     slug,
-    animeSlug: slugFromUrl($('.nvs a, .lokasieps a').first().attr('href')),
+    animeSlug,
     streamServers,
     downloadList,
     navigation: {
