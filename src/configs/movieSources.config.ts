@@ -95,7 +95,11 @@ export interface MovieSourceConfig {
 
 const nationalGeoraphic: MovieSourceConfig = {
   name: getEnv('MOVIE_SOURCE_A_NAME', 'NationalGeoraphic'),
-  baseURL: getEnv('MOVIE_SOURCE_A_URL', 'https://nationalgeoraphic.com'),
+  // Domain lama nationalgeoraphic.com kini redirect (9 hop) ke chairmanmao.org.
+  // Memakai URL akhir mencegah axios mengubah POST AJAX menjadi GET saat
+  // mengikuti redirect (body hilang -> resolusi server film gagal 400).
+  // Bisa ditimpa lewat MOVIE_SOURCE_A_URL bila domain berubah lagi.
+  baseURL: getEnv('MOVIE_SOURCE_A_URL', 'https://chairmanmao.org'),
   // Dropdown "Genre" di nav (<li id="menu-item-66">...<span>Genre</span>...)
   // adalah satu-satunya <li> menu top-level yang isi teksnya persis "Genre",
   // jadi diseleksi lewat XPath-like text match di parser (cheerio: iterasi

@@ -1,6 +1,6 @@
-import { getMovieHttpClient } from '../../helpers/movieHttpClient';
+import { getMovieHttpClient, resolveFinalUrl } from '../../helpers/movieHttpClient';
 import { MovieSourceConfig } from '../../configs/movieSources.config';
-import { SourceError } from '../../interfaces/errors.interface';
+import { PlaybackUnavailableError, DownloadUnavailableError, SourceError } from '../../interfaces/errors.interface';
 import { MovieCard, MovieDetail, MovieGenreItem, MovieHomeData, MovieStreamServer } from '../../interfaces/movie.interface';
 import * as MovieParser from '../../parsers/movie.parser';
 
@@ -70,6 +70,9 @@ export async function fetchDetail(source: MovieSourceConfig, slug: string): Prom
 
 export async function fetchDownload(source: MovieSourceConfig, slug: string): Promise<MovieDetail['downloadList']> {
   const { detail } = await fetchDetailRaw(source, slug);
+  if (detail.downloadList.length === 0) {
+    throw new DownloadUnavailableError(source.name, `Sumber tidak menyediakan tautan unduh untuk "${slug}"`);
+  }
   return detail.downloadList;
 }
 
@@ -97,6 +100,9 @@ export async function fetchWatch(
   }
 
   const client = getMovieHttpClient(source.baseURL);
+  // POST ke URL akhir redirect, bukan ke domain lama: axios mengubah POST
+  // menjadi GET saat mengikuti 301/302 sehingga body form hilang (HTTP 400).
+  const ajaxEndpoint = await resolveFinalUrl(`${source.baseURL}${source.paths.ajax}`);
   const servers: MovieStreamServer[] = [];
 
   for (const option of detail.servers) {
@@ -107,7 +113,7 @@ export async function fetchWatch(
         post_id: postId,
       }).toString();
 
-      const { data } = await client.post<string>(source.paths.ajax, body, {
+      const { data } = await client.post<string>(ajaxEndpoint, body, {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
           Referer: `${source.baseURL}${source.paths.detail(slug)}`,
@@ -125,7 +131,7 @@ export async function fetchWatch(
   }
 
   if (servers.length === 0) {
-    throw new SourceError(source.name, `Semua server streaming gagal di-resolve untuk "${slug}"`);
+    throw new PlaybackUnavailableError(source.name, `Semua server streaming gagal di-resolve untuk "${slug}"`);
   }
 
   return { title: detail.title, slug: detail.slug, servers };

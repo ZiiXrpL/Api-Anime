@@ -5,7 +5,9 @@ import { SourceError } from '../../interfaces/errors.interface';
 
 export async function getGenreList(): Promise<GenreItem[]> {
   try {
-    const { data } = await samehadakuClient.get<string>('/daftar-genre-anime');
+    // Halaman /daftar-genre-anime tidak lagi tersedia (404). Menu genre di
+    // homepage memuat daftar genre asli yang sama.
+    const { data } = await samehadakuClient.get<string>('/');
     return parseGenreList(data);
   } catch (error) {
     throw new SourceError('Samehadaku', `Gagal mengambil genre list: ${(error as Error).message}`);

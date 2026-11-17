@@ -1,5 +1,5 @@
 import { adapters } from '../adapters/registry';
-import { SOURCE_KEYS, SourceKey } from '../adapters/types';
+import { SOURCE_KEYS, SourceCapabilities, SourceKey } from '../adapters/types';
 import { cacheManager } from '../helpers/cacheManager';
 import { env } from '../configs/env';
 import axios from 'axios';
@@ -12,15 +12,14 @@ export interface SourceStatus {
   responseTime: number | null;
   lastChecked: string;
   httpStatus: number | null;
+  capabilities: SourceCapabilities;
   error?: string;
 }
 
 const CACHE_KEY = 'sources:status';
 const CACHE_TTL = 60; // detik — monitoring tidak boleh membanjiri sumber
 
-const UA =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ' +
-  'Chrome/124.0.0.0 Safari/537.36';
+const UA = 'Api-Anime/1.0 (+katalog anime publik)';
 
 async function checkSource(key: SourceKey): Promise<SourceStatus> {
   const adapter = adapters[key];
@@ -45,6 +44,7 @@ async function checkSource(key: SourceKey): Promise<SourceStatus> {
       responseTime: Date.now() - started,
       lastChecked: new Date().toISOString(),
       httpStatus: response.status,
+      capabilities: adapter.capabilities,
       ...(available ? {} : { error: body.trim().length <= 500 ? 'Respons HTML kosong' : `HTTP ${response.status}` }),
     };
   } catch (error) {
@@ -56,6 +56,7 @@ async function checkSource(key: SourceKey): Promise<SourceStatus> {
       responseTime: null,
       lastChecked: new Date().toISOString(),
       httpStatus: err.response?.status ?? null,
+      capabilities: adapter.capabilities,
       error: err.code || err.message || 'UNKNOWN',
     };
   }

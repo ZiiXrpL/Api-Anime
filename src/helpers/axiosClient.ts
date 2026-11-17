@@ -1,9 +1,11 @@
 import axios, { AxiosInstance } from 'axios';
 import { env } from '../configs/env';
 
-const USER_AGENT =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ' +
-  'Chrome/124.0.0.0 Safari/537.36';
+// UA transparan (mengidentifikasi API ini apa adanya). UA browser palsu
+// justru memicu WAF Samehadaku: terverifikasi Mozilla/... -> HTTP 403,
+// sedangkan "Api-Anime/1.0 (+katalog anime publik)" -> HTTP 200 di
+// Otakudesu, Nimegami, Kuramanime, Samehadaku dan sumber film.
+const USER_AGENT = 'Api-Anime/1.0 (+katalog anime publik)';
 
 function createClient(baseURL: string): AxiosInstance {
   const client = axios.create({

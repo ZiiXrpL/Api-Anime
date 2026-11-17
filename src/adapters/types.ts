@@ -35,6 +35,10 @@ export interface SourceCapabilities {
   detail: boolean;
   episodes: boolean;
   episodeDetail: boolean;
+  /** Sumber mengekspos URL player/media yang benar-benar bisa diputar. */
+  playback: boolean;
+  /** Sumber mengekspos tautan unduh resmi (bukan hasil rekonstruksi stream). */
+  download: boolean;
   genres: boolean;
   schedule: boolean;
 }

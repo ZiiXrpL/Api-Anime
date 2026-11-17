@@ -1,11 +1,36 @@
 import axios, { AxiosInstance } from 'axios';
 import { env } from '../configs/env';
 
-const USER_AGENT =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ' +
-  'Chrome/124.0.0.0 Safari/537.36';
+// UA transparan, sama seperti helpers/axiosClient.ts (bukan browser palsu).
+const USER_AGENT = 'Api-Anime/1.0 (+katalog anime publik)';
 
 const clientCache = new Map<string, AxiosInstance>();
+const finalUrlCache = new Map<string, { url: string; at: number }>();
+
+/**
+ * Domain sumber film melakukan rotasi (nationalgeoraphic.com -> chairmanmao.org).
+ * Redirect 301/302 membuat axios mengganti POST menjadi GET sehingga body
+ * form AJAX hilang dan resolusi server gagal (HTTP 400). Fungsi ini mengikuti
+ * redirect sekali lalu meng-cache URL akhir selama 1 jam; URL inilah yang
+ * dipakai untuk POST. Jika gagal, URL asli dikembalikan (perilaku lama).
+ */
+export async function resolveFinalUrl(url: string, ttlMs = 60 * 60 * 1000): Promise<string> {
+  const cached = finalUrlCache.get(url);
+  if (cached && Date.now() - cached.at < ttlMs) return cached.url;
+  try {
+    const res = await axios.get(url, {
+      timeout: env.REQUEST_TIMEOUT_MS,
+      maxRedirects: 10,
+      validateStatus: (status) => status >= 200 && status < 400,
+      headers: { 'User-Agent': USER_AGENT },
+    });
+    const final = (res.request as { res?: { responseUrl?: string } })?.res?.responseUrl ?? url;
+    finalUrlCache.set(url, { url: final, at: Date.now() });
+    return final;
+  } catch {
+    return url;
+  }
+}
 
 /**
  * Buat (atau ambil dari cache in-memory) axios client untuk sebuah baseURL

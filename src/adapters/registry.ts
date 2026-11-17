@@ -35,7 +35,7 @@ const otakudesu: AnimeAdapter = {
   key: 'otakudesu',
   displayName: 'Otakudesu',
   baseUrl: env.OTAKUDESU_URL,
-  capabilities: { home: true, ongoing: true, completed: true, list: true, search: true, detail: true, episodes: true, episodeDetail: true, genres: true, schedule: true },
+  capabilities: { home: true, ongoing: true, completed: true, list: true, search: true, detail: true, episodes: true, episodeDetail: true, playback: true, download: true, genres: true, schedule: true },
   getHome: OH.getHome,
   getOngoing: OO.getOngoing,
   getCompleted: OC.getCompleted,
@@ -58,8 +58,10 @@ const nimegami: AnimeAdapter = {
   baseUrl: env.NIMEGAMI_URL,
   // Homepage, katalog /anime/ (filter status & q) dan halaman detail
   // server-rendered. Endpoint episode detail tetap dinonaktifkan karena
-  // halamannya client-rendered.
-  capabilities: { home: true, ongoing: true, completed: true, list: true, search: true, detail: true, episodes: true, episodeDetail: false, genres: true, schedule: false },
+  // halamannya client-rendered. Tidak ada URL player statis di HTML detail
+  // maupun episode (diverifikasi: episodeList hanya anchor #episode_N), jadi
+  // playback/download sengaja false — jangan mengarang URL media.
+  capabilities: { home: true, ongoing: true, completed: true, list: true, search: true, detail: true, episodes: true, episodeDetail: false, playback: false, download: false, genres: true, schedule: false },
   getHome: NV2.getHome,
   getOngoing: NV2.getOngoing,
   getCompleted: NV2.getCompleted,
@@ -78,7 +80,11 @@ const kuramanime: AnimeAdapter = {
   key: 'kuramanime',
   displayName: 'Kuramanime',
   baseUrl: env.KURAMANIME_URL,
-  capabilities: { home: true, ongoing: true, completed: true, list: true, search: true, detail: true, episodes: true, episodeDetail: true, genres: true, schedule: true },
+  // Halaman episode server-rendered (judul & navigasi), tetapi URL player
+  // hanya dibentuk di browser dari token data-kk via player.min.js. Tidak
+  // ada URL media/iframe statis di HTML dan tidak ada tautan unduh resmi —
+  // capability playback/download jujur false (tidak merekayasa proteksi JS).
+  capabilities: { home: true, ongoing: true, completed: true, list: true, search: true, detail: true, episodes: true, episodeDetail: true, playback: false, download: false, genres: true, schedule: true },
   getHome: KH.getHome,
   getOngoing: KH.getOngoing,
   getCompleted: KH.getCompleted,
@@ -95,7 +101,9 @@ const samehadaku: AnimeAdapter = {
   key: 'samehadaku',
   displayName: 'Samehadaku',
   baseUrl: env.SAMEHADAKU_URL,
-  capabilities: { home: true, ongoing: true, completed: true, list: true, search: true, detail: true, episodes: true, episodeDetail: true, genres: true, schedule: true },
+  // Route /anime-completed dan /jadwal-rilis sudah 404 di situs aktual;
+  // capability ini dinonaktifkan daripada mengembalikan data sumber lain.
+  capabilities: { home: true, ongoing: true, completed: false, list: true, search: true, detail: true, episodes: true, episodeDetail: true, playback: true, download: true, genres: true, schedule: false },
   getHome: SH.getHome,
   getOngoing: SO.getOngoing,
   getCompleted: SC.getCompleted,

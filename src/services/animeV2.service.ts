@@ -8,7 +8,7 @@ import {
   HomeData,
   ScheduleItem,
 } from '../interfaces/anime.interface';
-import { AllSourcesFailedError } from '../interfaces/errors.interface';
+import { ApiFailureError, AllSourcesFailedError } from '../interfaces/errors.interface';
 import { cacheManager } from '../helpers/cacheManager';
 import { CACHE_TTL } from '../configs/cache';
 import { logger } from '../utils/logger';
@@ -52,7 +52,15 @@ async function run<T>(
     .map((key) => ({ key, run: (adapter: AnimeAdapter) => fetcher(adapter) }));
 
   if (steps.length === 0) {
+    if (requested) {
+      throw new ApiFailureError(`Source "${requested}" tidak mendukung ${capability}`, 'CAPABILITY_UNSUPPORTED', 400, requested);
+    }
     throw new AllSourcesFailedError(`Tidak ada sumber yang mendukung ${capability}`);
+  }
+  // Permintaan eksplisit tidak boleh diam-diam dilayani sumber lain.
+  // Jika sumber tidak mendukung capability-nya, kembalikan error jujur.
+  if (requested && !adapters[requested].capabilities[capability]) {
+    throw new ApiFailureError(`Source "${requested}" tidak mendukung ${capability}`, 'CAPABILITY_UNSUPPORTED', 400, requested);
   }
 
   const failures: string[] = [];
@@ -61,12 +69,31 @@ async function run<T>(
       const data = await step.run(adapters[step.key]);
       if (skipEmpty && isEmpty(data)) {
         failures.push(`${step.key}: kosong`);
+        if (requested) {
+          throw new ApiFailureError(
+            `Source "${requested}" mengembalikan data kosong untuk ${capability}`,
+            'EMPTY_RESULT',
+            502,
+            requested,
+          );
+        }
         continue;
       }
       return { source: step.key, data };
     } catch (error) {
+      if (error instanceof ApiFailureError) throw error;
       failures.push(`${step.key}: ${(error as Error).message}`);
       logger.warn(`[animeV2] ${step.key}.${capability} gagal: ${(error as Error).message}`);
+      if (requested) {
+        const message = (error as Error).message;
+        const blocked = /403|forbidden/i.test(message);
+        throw new ApiFailureError(
+          `Source "${requested}" ${blocked ? 'menolak akses (HTTP 403)' : 'tidak tersedia'} untuk ${capability}: ${message}`,
+          blocked ? 'SOURCE_BLOCKED' : 'SOURCE_UNAVAILABLE',
+          502,
+          requested,
+        );
+      }
     }
   }
   const err = new AllSourcesFailedError(`Semua sumber gagal untuk ${capability} (${failures.join('; ')})`);
