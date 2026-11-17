@@ -63,6 +63,8 @@ export async function getEpisodeDetail(slug: string): Promise<EpisodeDetail> {
   if (candidates.size === 0) {
     const detailHtml = await getHtml(`/${animeSlug}/`);
     rememberDownloadTokens(animeSlug, detailHtml);
+    // Hindari penolakan 404 dari WAF bila request download menyusul terlalu cepat.
+    await new Promise((resolve) => setTimeout(resolve, 2000));
     for (const match of detailHtml.matchAll(
       new RegExp(`/download/${episodeNumber}/([a-z0-9]+)/([a-z0-9]+)/`, 'gi'),
     )) {
