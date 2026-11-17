@@ -28,6 +28,7 @@ export const env = {
   // semuanya redirect ke v20.kuramanime.ing. Pakai tujuan akhir supaya
   // tidak bergantung pada rantai redirect yang bisa berubah.
   KURAMANIME_URL: getEnv('KURAMANIME_URL', 'https://v20.kuramanime.ing'),
+  ANIMEMU_URL: getEnv('ANIMEMU_URL', 'https://animemu.my.id'),
 
   CACHE_TTL_HOME: getEnvNumber('CACHE_TTL_HOME', 600),
   CACHE_TTL_LIST: getEnvNumber('CACHE_TTL_LIST', 1800),

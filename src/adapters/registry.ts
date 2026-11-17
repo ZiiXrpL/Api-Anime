@@ -28,6 +28,8 @@ import * as SE from '../scrapers/samehadaku/episode';
 import * as SG from '../scrapers/samehadaku/genre';
 import * as SSc from '../scrapers/samehadaku/schedule';
 
+import * as AM from '../scrapers/animemu';
+
 function episodesFromDetail(list: { title: string; slug: string; url: string }[]): AnimeCard[] {
   return list.map((e) => ({ title: e.title, slug: e.slug, poster: '', url: e.url }));
 }
@@ -112,15 +114,35 @@ const samehadaku: AnimeAdapter = {
   getSchedule: SSc.getSchedule,
 };
 
+const animemu: AnimeAdapter = {
+  key: 'animemu',
+  displayName: 'AnimeMu',
+  baseUrl: env.ANIMEMU_URL,
+  // REST API publik: katalog/detail/episode nyata, stream_url bertanda tangan
+  // ke media MP4/MKV. Endpoint download butuh auth, genres/schedule tidak ada.
+  capabilities: { home: true, ongoing: true, completed: false, list: true, search: true, detail: true, episodes: true, episodeDetail: true, playback: true, download: false, genres: false, schedule: false },
+  getHome: AM.getHome,
+  getOngoing: AM.getOngoing,
+  getCompleted: AM.getCompleted,
+  getAnimeList: AM.getAnimeList,
+  searchAnime: AM.searchAnime,
+  getAnimeDetail: AM.getAnimeDetail,
+  getEpisodes: AM.getEpisodes,
+  getEpisodeDetail: AM.getEpisodeDetail,
+  getGenres: AM.getGenres,
+  getSchedule: AM.getSchedule,
+};
+
 export const adapters: Record<SourceKey, AnimeAdapter> = {
   otakudesu,
   nimegami,
   kuramanime,
   samehadaku,
+  animemu,
 };
 
 /** Urutan fallback default berdasarkan reliabilitas hasil pengujian. */
-export const DEFAULT_FALLBACK_ORDER: SourceKey[] = ['otakudesu', 'kuramanime', 'nimegami', 'samehadaku'];
+export const DEFAULT_FALLBACK_ORDER: SourceKey[] = ['animemu', 'samehadaku', 'nimegami', 'otakudesu', 'kuramanime'];
 
 export function getAdapter(key: SourceKey): AnimeAdapter {
   return adapters[key];

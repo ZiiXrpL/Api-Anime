@@ -8,9 +8,9 @@ import {
 } from '../interfaces/anime.interface';
 
 /** Kunci sumber yang dipakai di query `?source=` dan field `source`. */
-export type SourceKey = 'otakudesu' | 'nimegami' | 'kuramanime' | 'samehadaku';
+export type SourceKey = 'otakudesu' | 'nimegami' | 'kuramanime' | 'samehadaku' | 'animemu';
 
-export const SOURCE_KEYS: SourceKey[] = ['otakudesu', 'nimegami', 'kuramanime', 'samehadaku'];
+export const SOURCE_KEYS: SourceKey[] = ['otakudesu', 'nimegami', 'kuramanime', 'samehadaku', 'animemu'];
 
 /** Nama tampilan bersejarah (dipakai internal) -> kunci kanonik. */
 const ALIASES: Record<string, SourceKey> = {
@@ -18,6 +18,7 @@ const ALIASES: Record<string, SourceKey> = {
   nimegami: 'nimegami', nime: 'nimegami',
   kuramanime: 'kuramanime', kurama: 'kuramanime',
   samehadaku: 'samehadaku', same: 'samehadaku',
+  animemu: 'animemu', animeMu: 'animemu',
 };
 
 export function parseSourceKey(value: unknown): SourceKey | undefined {

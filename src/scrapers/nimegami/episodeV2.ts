@@ -1,5 +1,4 @@
 import axios from 'axios';
-import * as cheerio from 'cheerio';
 import { SourceError } from '../../interfaces/errors.interface';
 import { DownloadGroup, EpisodeDetail } from '../../interfaces/anime.interface';
 
@@ -15,6 +14,19 @@ async function getHtml(path: string): Promise<string> {
     maxRedirects: 10,
   });
   return data;
+}
+
+async function resolveDownloadUrl(path: string): Promise<string> {
+  const response = await axios.get<string>(`https://nimegami.id${path}`, {
+    headers: { 'User-Agent': 'Mozilla/5.0', Connection: 'close' },
+    timeout: 20000,
+    maxRedirects: 0,
+    validateStatus: (status) => status >= 200 && status < 400,
+  });
+  const location = String(response.headers.location || '');
+  const matched = location.match(/\/hal\/download\/([a-f0-9-]+)\?name=([^&]+)/i);
+  if (!matched) return '';
+  return `https://vsys-srv.berkasdrive.com/public/download/${matched[1]}?name=${decodeURIComponent(matched[2])}`;
 }
 
 function qualityRank(quality: string): number {
@@ -87,17 +99,9 @@ export async function getEpisodeDetail(slug: string): Promise<EpisodeDetail> {
   let usedQuality = '';
   for (const [quality, path] of ordered.slice(0, 2)) {
     try {
-      const landing = await getHtml(path);
-      const $ = cheerio.load(landing);
-      const found = $('a[href*="/public/download/"]').first().attr('href') || '';
-      if (/^https?:\/\//i.test(found)) {
-        directUrl = found;
-        usedQuality = quality;
-        break;
-      }
-      const match = landing.match(/https?:\/\/[^\s"'<>]+\/public\/download\/[^\s"'<>]+/i);
-      if (match) {
-        directUrl = match[0].replace(/&amp;/g, '&');
+      const resolved = await resolveDownloadUrl(path);
+      if (resolved) {
+        directUrl = resolved;
         usedQuality = quality;
         break;
       }
