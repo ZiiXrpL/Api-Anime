@@ -13,6 +13,7 @@ import * as OG from '../scrapers/otakudesu/genre';
 import * as OSc from '../scrapers/otakudesu/schedule';
 
 import * as NV2 from '../scrapers/nimegami/v2';
+import * as NEV2 from '../scrapers/nimegami/episodeV2';
 
 import * as KH from '../scrapers/kuramanime/anime';
 import * as KD from '../scrapers/kuramanime/detail';
@@ -56,12 +57,9 @@ const nimegami: AnimeAdapter = {
   key: 'nimegami',
   displayName: 'Nimegami',
   baseUrl: env.NIMEGAMI_URL,
-  // Homepage, katalog /anime/ (filter status & q) dan halaman detail
-  // server-rendered. Endpoint episode detail tetap dinonaktifkan karena
-  // halamannya client-rendered. Tidak ada URL player statis di HTML detail
-  // maupun episode (diverifikasi: episodeList hanya anchor #episode_N), jadi
-  // playback/download sengaja false — jangan mengarang URL media.
-  capabilities: { home: true, ongoing: true, completed: true, list: true, search: true, detail: true, episodes: true, episodeDetail: false, playback: false, download: false, genres: true, schedule: false },
+  // Detail & episode server-rendered. URL media MP4 diambil dari rute
+  // unduh resmi Nimegami -> halaman BerkasDrive -> tautan file langsung.
+  capabilities: { home: true, ongoing: true, completed: true, list: true, search: true, detail: true, episodes: true, episodeDetail: true, playback: true, download: true, genres: true, schedule: false },
   getHome: NV2.getHome,
   getOngoing: NV2.getOngoing,
   getCompleted: NV2.getCompleted,
@@ -69,9 +67,7 @@ const nimegami: AnimeAdapter = {
   searchAnime: NV2.searchAnime,
   getAnimeDetail: NV2.getAnimeDetail,
   getEpisodes: async (slug) => episodesFromDetail((await NV2.getAnimeDetail(slug)).episodeList),
-  getEpisodeDetail: async () => {
-    throw new Error('Nimegami tidak menyediakan endpoint episodeDetail yang dapat di-scrape (halaman client-rendered)');
-  },
+  getEpisodeDetail: NEV2.getEpisodeDetail,
   getGenres: async () => NV2.getGenres(),
   getSchedule: async () => [],
 };

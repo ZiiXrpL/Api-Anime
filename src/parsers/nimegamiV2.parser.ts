@@ -90,6 +90,28 @@ export function parseDetail(html: string, slug: string): AnimeDetail {
 
   const episodeList: EpisodeItem[] = [];
   const seenEp = new Set<string>();
+  // HTML detail Nimegami menyimpan tautan /download/{ep}/{quality}/{token}/
+  // secara server-rendered. Rute inilah yang stabil untuk resolusi media.
+  const qualityRank: Record<string, number> = { '360p': 1, '480p': 2, '720p': 3, '1080p': 4 };
+  const streamByEpisode = new Map<number, { quality: string; token: string }>();
+  for (const match of html.matchAll(/\/download\/(\d+)\/([a-z0-9]+)\/([a-z0-9]+)\//gi)) {
+    const num = Number(match[1]);
+    const quality = match[2].toLowerCase();
+    const current = streamByEpisode.get(num);
+    if (!current || (qualityRank[quality] ?? 0) > (qualityRank[current.quality] ?? 0)) {
+      streamByEpisode.set(num, { quality, token: match[3] });
+    }
+  }
+  for (const num of [...streamByEpisode.keys()].sort((a, b) => a - b)) {
+    const info = streamByEpisode.get(num)!;
+    seenEp.add(String(num));
+    episodeList.push({
+      title: `Episode ${num}`,
+      slug: `nimegami-${slug}--ep-${num}`,
+      url: abs(`/${slug}/download/${num}/${info.quality}/${info.token}/`),
+    });
+  }
+  // Fallback markup lama bila tidak ada tautan streaming.
   $('a[href*="episode"], a[aria-label^="Episode"]').each((_, el) => {
     const num = clean($(el).text()).match(/\b(\d+)\b/)?.[1] || ($(el).attr('aria-label') || '').match(/Episode\s+(\d+)/i)?.[1];
     if (!num || seenEp.has(num)) return;
