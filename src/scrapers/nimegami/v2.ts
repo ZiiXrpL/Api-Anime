@@ -2,6 +2,7 @@ import { nimegamiClient } from '../../helpers/axiosClient';
 import { SourceError } from '../../interfaces/errors.interface';
 import { AnimeCard, AnimeDetail, GenreItem, HomeData } from '../../interfaces/anime.interface';
 import { parseDetail, parseGenres, parseHome, parseHomeCards } from '../../parsers/nimegamiV2.parser';
+import { rememberDownloadTokens } from './episodeV2';
 
 async function get(path: string, label: string): Promise<string> {
   try {
@@ -17,7 +18,9 @@ export async function getHome(): Promise<HomeData> {
 }
 
 export async function getAnimeDetail(slug: string): Promise<AnimeDetail> {
-  const detail = parseDetail(await get(`/${encodeURIComponent(slug)}/`, `detail "${slug}"`), slug);
+  const html = await get(`/${encodeURIComponent(slug)}/`, `detail "${slug}"`);
+  rememberDownloadTokens(slug, html);
+  const detail = parseDetail(html, slug);
   if (!detail.title) {
     throw new SourceError('Nimegami', `Anime "${slug}" tidak ditemukan di Nimegami`);
   }

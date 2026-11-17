@@ -21,6 +21,21 @@ function qualityRank(quality: string): number {
   return { '360p': 1, '480p': 2, '720p': 3, '1080p': 4 }[quality.toLowerCase()] ?? 0;
 }
 
+/** Token dari halaman detail disimpan supaya episode cukup satu request. */
+const tokenCache = new Map<string, Map<string, string>>();
+
+export function rememberDownloadTokens(slug: string, html: string): void {
+  const map = new Map<string, string>();
+  for (const match of html.matchAll(/\/download\/(\d+)\/([a-z0-9]+)\/([a-z0-9]+)\//gi)) {
+    const key = `${match[1]}:${match[2].toLowerCase()}`;
+    const current = map.get(key);
+    if (!current || qualityRank(match[2]) > qualityRank(current.split('/')[3] ?? '')) {
+      map.set(key, match[0]);
+    }
+  }
+  tokenCache.set(slug, map);
+}
+
 /**
  * Episode Nimegami: halaman detail memuat tautan unduh resmi
  * /download/{ep}/{quality}/{token}/ secara server-rendered. Rute itu
@@ -37,15 +52,25 @@ export async function getEpisodeDetail(slug: string): Promise<EpisodeDetail> {
   const animeSlug = matched[1];
   const episodeNumber = matched[2];
 
-  const detailHtml = await getHtml(`/${animeSlug}/`);
+  const cached = tokenCache.get(animeSlug);
   const candidates = new Map<string, string>();
-  for (const match of detailHtml.matchAll(
-    new RegExp(`/download/${episodeNumber}/([a-z0-9]+)/([a-z0-9]+)/`, 'gi'),
-  )) {
-    const quality = match[1].toLowerCase();
-    const current = candidates.get(quality);
-    if (!current || qualityRank(quality) > qualityRank(current.split('/')[3] ?? '')) {
-      candidates.set(quality, match[0]);
+  if (cached) {
+    for (const [key, path] of cached) {
+      const [ep, quality] = key.split(':');
+      if (ep === episodeNumber) candidates.set(quality, path);
+    }
+  }
+  if (candidates.size === 0) {
+    const detailHtml = await getHtml(`/${animeSlug}/`);
+    rememberDownloadTokens(animeSlug, detailHtml);
+    for (const match of detailHtml.matchAll(
+      new RegExp(`/download/${episodeNumber}/([a-z0-9]+)/([a-z0-9]+)/`, 'gi'),
+    )) {
+      const quality = match[1].toLowerCase();
+      const current = candidates.get(quality);
+      if (!current || qualityRank(quality) > qualityRank(current.split('/')[3] ?? '')) {
+        candidates.set(quality, match[0]);
+      }
     }
   }
   const ordered = [...candidates.entries()].sort((a, b) => {
@@ -58,30 +83,25 @@ export async function getEpisodeDetail(slug: string): Promise<EpisodeDetail> {
 
   let directUrl = '';
   let usedQuality = '';
-  for (const [quality, path] of ordered) {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      // Nimegami membatasi request berurutan; jeda singkat sebelum fetch.
-      await new Promise((resolve) => setTimeout(resolve, attempt === 0 ? 500 : 1500));
-      try {
-        const landing = await getHtml(path);
-        const $ = cheerio.load(landing);
-        const found = $('a[href*="/public/download/"]').first().attr('href') || '';
-        if (/^https?:\/\//i.test(found)) {
-          directUrl = found;
-          usedQuality = quality;
-          break;
-        }
-        const match = landing.match(/https?:\/\/[^\s"'<>]+\/public\/download\/[^\s"'<>]+/i);
-        if (match) {
-          directUrl = match[0].replace(/&amp;/g, '&');
-          usedQuality = quality;
-          break;
-        }
-      } catch {
-        // Coba lagi / kualitas berikutnya; satu token bisa gagal.
+  for (const [quality, path] of ordered.slice(0, 2)) {
+    try {
+      const landing = await getHtml(path);
+      const $ = cheerio.load(landing);
+      const found = $('a[href*="/public/download/"]').first().attr('href') || '';
+      if (/^https?:\/\//i.test(found)) {
+        directUrl = found;
+        usedQuality = quality;
+        break;
       }
+      const match = landing.match(/https?:\/\/[^\s"'<>]+\/public\/download\/[^\s"'<>]+/i);
+      if (match) {
+        directUrl = match[0].replace(/&amp;/g, '&');
+        usedQuality = quality;
+        break;
+      }
+    } catch {
+      // Coba kualitas berikutnya; satu token bisa gagal.
     }
-    if (directUrl) break;
   }
 
   if (!directUrl) {
