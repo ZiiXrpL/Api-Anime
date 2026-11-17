@@ -56,12 +56,15 @@ const nimegami: AnimeAdapter = {
   key: 'nimegami',
   displayName: 'Nimegami',
   baseUrl: env.NIMEGAMI_URL,
-  capabilities: { home: true, ongoing: false, completed: false, list: false, search: false, detail: true, episodes: true, episodeDetail: false, genres: true, schedule: false },
+  // Homepage, katalog /anime/ (filter status & q) dan halaman detail
+  // server-rendered. Endpoint episode detail tetap dinonaktifkan karena
+  // halamannya client-rendered.
+  capabilities: { home: true, ongoing: true, completed: true, list: true, search: true, detail: true, episodes: true, episodeDetail: false, genres: true, schedule: false },
   getHome: NV2.getHome,
-  getOngoing: async () => [],
-  getCompleted: async () => [],
-  getAnimeList: async () => [],
-  searchAnime: async () => [],
+  getOngoing: NV2.getOngoing,
+  getCompleted: NV2.getCompleted,
+  getAnimeList: NV2.getAnimeList,
+  searchAnime: NV2.searchAnime,
   getAnimeDetail: NV2.getAnimeDetail,
   getEpisodes: async (slug) => episodesFromDetail((await NV2.getAnimeDetail(slug)).episodeList),
   getEpisodeDetail: async () => {
